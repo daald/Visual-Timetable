@@ -2,12 +2,17 @@
 /*
 unknown source. found in:
 http://stackoverflow.com/questions/3764459/why-will-this-dateparser-not-work-in-safari
+
+I made some small corrections:
+- the millisecond dot in the time wasn't quoted correctly
+- time zone doesn't need a : anymore (still ISO8601 conform)
+- changed expression to match the whole string
 */
 
 Date.prototype.setISO8601 = function (string) {
-    var regexp = "([0-9]{4})(-([0-9]{2})(-([0-9]{2})" +
-        "(T([0-9]{2}):([0-9]{2})(:([0-9]{2})(\.([0-9]+))?)?" +
-        "(Z|(([-+])([0-9]{2}):([0-9]{2})))?)?)?)?";
+    var regexp = "^([0-9]{4})(-([0-9]{2})(-([0-9]{2})" +
+        "(T([0-9]{2}):([0-9]{2})(:([0-9]{2})(\\.([0-9]+))?)?" +
+        "(Z|(([-+])([0-9]{2}):?([0-9]{2})))?)?)?)?$";
     var d = string.match(new RegExp(regexp));
 
     var offset = 0;
