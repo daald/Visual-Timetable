@@ -6,34 +6,72 @@ function avg(v1, v2) {
 }
 
 $(function(){
-  $('#holder').empty();
+  //$('#userInput').submit(function() {
+  $('input[type=submit]').click(function(event) {
+    event.preventDefault();
 
+    updateGraphics();
+  });
+
+
+/*$('#userInput').bind('submit', function () {
+  var elements = this.elements;
+alert(elements);
+});*/
+
+  // initial display
+  updateGraphics();
+
+});
+
+
+function updateGraphics() {
   var hh = 480;
   var ww = 640;
 
-  var R = Raphael('holder', ww, hh);
+  $('#timetable').empty();
+  var R = Raphael('timetable', ww, hh);
+
+
+    var from = $('[name=from]').val();
+    var to   = $('[name=to]').val();
+    var date = $('[name=date]').val();
+    var time = $('[name=time]').val();
 
 
 
 $.ajax({
   type: 'GET',
   //url: 'http://transport.opendata.ch/v1/stationboard',  data: 'station=Aarau&limit=10'
-  url: 'http://transport.opendata.ch/v1/connections', data: 'from=Z%C3%BCrich+Hardbr%C3%BCcke&to=Schaffhausen&date=2012-12-10&time=19:00:00&limit=5'
+  //url: 'http://transport.opendata.ch/v1/connections', data: 'from=Z%C3%BCrich+Hardbr%C3%BCcke&to=Schaffhausen&date=2012-12-10&time=19:00:00&limit=5'
+  url: 'http://transport.opendata.ch/v1/connections', data: 'from='+from+'&to='+to+'&date=2012-12-10&time='+time+'&limit=5'
 }).done( function(msg){
   json = JSON.parse(msg);
   console.log(json);
 
+  connections = json.connections;
+  console.log('connections', connections);
+
+  // Get dimensions
+  var tMin = NaN;
+  var tMax = NaN;
+  for ( var cid in connections ) {
+    connection = connections[cid];
+    console.log( cid + ': ', connection );
+    var d = new Date();
+    d.setISO8601( connection.from.departure );
+    if (isNaN(tMin) || tMin > d.getTime()) tMin = d.getTime();
+    d.setISO8601( connection.to.arrival );
+    if (isNaN(tMax) || tMax < d.getTime()) tMax = d.getTime();
+  }
+  console.log('tMin', tMin);
+  console.log('tMax', tMax);
+
   var ox1 = 100;
-  var tMin = 1355166540010;
-  var tMax = 1355172360010;
+
   var tOff = tMin;
   var tScale = hh / (tMax-tMin);
 
-  tMin = 5000000000000;
-  tMax = 0;
-
-  connections = json.connections;
-  console.log('x', connections);
   for ( var cid in connections ) {
     connection = connections[cid];
     console.log( cid + ': ', connection );
@@ -78,9 +116,6 @@ $.ajax({
         R.text( x2-8, y2-20, stn2 ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'end'});
       }
 
-      if (tMin > date1.getTime()) tMin = date1.getTime();
-      if (tMax < date2.getTime()) tMax = date2.getTime();
-
       R.text( x2-8, y1+6, date1.format('HH:MM') ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'end'});
       R.text( x2-8, y2-6, date2.format('HH:MM') ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'end'});
 
@@ -90,9 +125,6 @@ $.ajax({
       console.log( '    ' + sid + ': ', section, section.departure, section.arrival );
     }
   }
-
-  console.log('tMin', tMin);
-  console.log('tMax', tMax);
 
   d = new Date(tMin)
   d.setMinutes(Math.floor(d.getMinutes()/30)*30)
@@ -139,5 +171,5 @@ $.ajax({
       + ",\nError Thrown: " + errorThrown );
 });
 
-});
+}
 
