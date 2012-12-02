@@ -34,7 +34,7 @@ function updateGraphics() {
 
 
     var from = $('[name=from]').val();
-    var to   = $('[name=to]').val();
+    var to   = $('[name=to]'  ).val();
     var date = $('[name=date]').val();
     var time = $('[name=time]').val();
 
@@ -67,6 +67,13 @@ $.ajax({
   console.log('tMin', tMin);
   console.log('tMax', tMax);
 
+  d = new Date(tMin)
+  d.setMinutes(Math.floor(d.getMinutes()/30)*30)
+  d.setSeconds(0)
+  d.setMilliseconds(0)
+  tMin = d.getTime();
+  console.log('tMin2', tMin);
+
   var ox1 = 100;
 
   var tOff = tMin;
@@ -93,7 +100,8 @@ $.ajax({
       var y2 = Math.round((date2.getTime() - tOff) * tScale);
       var h = y2-y1;
 
-      R.rect(x1+5, y1, x2-x1-10, y2-y1).attr({fill: '#ccc', 'fill-opacity': .5});
+      // bounding rect
+      R.rect(x1+5, y1, x2-x1-10, y2-y1).attr({fill: '#ccc', 'fill-opacity': .5, 'stroke-opacity': 1, 'stroke-width': .25});
 
       plf1 = section.departure.platform;
       if (plf1) {
@@ -126,25 +134,20 @@ $.ajax({
     }
   }
 
-  d = new Date(tMin)
-  d.setMinutes(Math.floor(d.getMinutes()/30)*30)
-  d.setSeconds(0)
-  d.setMilliseconds(0)
-  t = d.getTime();
-
-  var y = Math.round((t - tOff) * tScale);
+  var y = Math.round((tMin - tOff) * tScale);
 
   var sI = NaN, lI = NaN;
 
-  var intervals = [5, 10, 15, 30, 60];
+  var intervals = [10, 15, 30, 60];
   var interval;
   for (i in intervals ) {
     interval = intervals[i]*60000;
-    var y2 = Math.round((t + interval - tOff) * tScale);
+    var y2 = Math.round((tMin + interval - tOff) * tScale);
     if (y2-y >= 25 && isNaN(lI) ) lI = interval;
     if (y2-y >= 15 && isNaN(sI) ) sI = interval;
   }
 
+  // thin lines
   t = d.getTime();
   for ( ; t<tMax+sI; t+=sI ) {
     var y = Math.round((t - tOff) * tScale);
@@ -152,6 +155,7 @@ $.ajax({
     //R.path('M50,'+y+'L'+ww+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .5});
   }
 
+  // thick lines with labels
   t = d.getTime();
   for ( ; t<tMax+lI; t+=lI ) {
     var y = Math.round((t - tOff) * tScale);
