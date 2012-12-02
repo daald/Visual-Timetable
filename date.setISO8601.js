@@ -4,7 +4,7 @@ unknown source. found in:
 http://stackoverflow.com/questions/3764459/why-will-this-dateparser-not-work-in-safari
 
 I made some small corrections:
-- the millisecond dot in the time wasn't quoted correctly
+- the millisecond dot in the time wasn't correctly quoted
 - time zone doesn't need a : anymore (still ISO8601 conform)
 - changed expression to match the whole string
 */
