@@ -1,10 +1,12 @@
 
 
 
+//////////////////////////////////////// MINI LIB
 function avg(v1, v2) {
   return (v2 - v1) / 2 + v1;
 }
 
+//////////////////////////////////////// START FUNCTION
 $(function(){
   //$('#userInput').submit(function() {
   $('input[type=submit]').click(function(event) {
@@ -13,42 +15,47 @@ $(function(){
     updateGraphics();
   });
 
-
-/*$('#userInput').bind('submit', function () {
-  var elements = this.elements;
-alert(elements);
-});*/
-
   // initial display
   updateGraphics();
-
 });
 
 
+//////////////////////////////////////// VARIABLES
+var hh = 480;
+var ww = 640;
+var R;
+
+//////////////////////////////////////// OUTPUT ENTRY POINT
 function updateGraphics() {
-  var hh = 480;
-  var ww = 640;
-
   $('#timetable').empty();
-  var R = Raphael('timetable', ww, hh);
+  R = Raphael('timetable', ww, hh);
 
+  var from = $('[name=from]').val();
+  var to   = $('[name=to]'  ).val();
+  var date = $('[name=date]').val();
+  var time = $('[name=time]').val();
 
-    var from = $('[name=from]').val();
-    var to   = $('[name=to]'  ).val();
-    var date = $('[name=date]').val();
-    var time = $('[name=time]').val();
+  $.ajax({
+    type: 'GET',
+    url: 'http://transport.opendata.ch/v1/connections', data: 'from='+from+'&to='+to+'&date=2012-12-10&time='+time+'&limit=5'
+  }).done( function(msg) {
+    json = JSON.parse(msg);
+    console.log(json);
 
+    drawMainConnections(json)
 
+    //alert( "Data Saved: " + json );
+  }).fail( function( xmlHttpRequest, statusText, errorThrown ) {
+    alert(
+      "Your form submission failed.\n\n"
+        + "XML Http Request: " + JSON.stringify( xmlHttpRequest )
+        + ",\nStatus Text: " + statusText
+        + ",\nError Thrown: " + errorThrown );
+  });
+}
 
-$.ajax({
-  type: 'GET',
-  //url: 'http://transport.opendata.ch/v1/stationboard',  data: 'station=Aarau&limit=10'
-  //url: 'http://transport.opendata.ch/v1/connections', data: 'from=Z%C3%BCrich+Hardbr%C3%BCcke&to=Schaffhausen&date=2012-12-10&time=19:00:00&limit=5'
-  url: 'http://transport.opendata.ch/v1/connections', data: 'from='+from+'&to='+to+'&date=2012-12-10&time='+time+'&limit=5'
-}).done( function(msg){
-  json = JSON.parse(msg);
-  console.log(json);
-
+//////////////////////////////////////// OUTPUT DATA CALLBACK
+function drawMainConnections(json) {
   connections = json.connections;
   console.log('connections', connections);
 
@@ -163,17 +170,5 @@ $.ajax({
     R.text( 5, y, d.format('HH:MM') ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'start'});
     R.path('M50,'+y+'L'+ww+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .25});
   }
-
-
-  //alert( "Data Saved: " + json );
-
-}).fail( function( xmlHttpRequest, statusText, errorThrown ) {
-  alert(
-    "Your form submission failed.\n\n"
-      + "XML Http Request: " + JSON.stringify( xmlHttpRequest )
-      + ",\nStatus Text: " + statusText
-      + ",\nError Thrown: " + errorThrown );
-});
-
 }
 
