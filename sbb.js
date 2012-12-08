@@ -24,6 +24,8 @@ $(function(){
 var hh = 480;
 var ww = 640;
 var R;
+var tMin, tMax;
+var tOff, tScale;
 
 //////////////////////////////////////// OUTPUT ENTRY POINT
 function updateGraphics() {
@@ -60,8 +62,8 @@ function drawMainConnections(json) {
   console.log('connections', connections);
 
   // Get dimensions
-  var tMin = NaN;
-  var tMax = NaN;
+  tMin = NaN;
+  tMax = NaN;
   for ( var cid in connections ) {
     connection = connections[cid];
     console.log( cid + ': ', connection );
@@ -74,17 +76,19 @@ function drawMainConnections(json) {
   console.log('tMin', tMin);
   console.log('tMax', tMax);
 
-  d = new Date(tMin)
+  var d = new Date(tMin)
   d.setMinutes(Math.floor(d.getMinutes()/30)*30)
   d.setSeconds(0)
   d.setMilliseconds(0)
   tMin = d.getTime();
   console.log('tMin2', tMin);
 
-  var ox1 = 100;
+  var ox1 = 40;
 
-  var tOff = tMin;
-  var tScale = hh / (tMax-tMin);
+  tOff = tMin;
+  tScale = hh / (tMax-tMin);
+
+  drawGrid()
 
   for ( var cid in connections ) {
     connection = connections[cid];
@@ -108,39 +112,70 @@ function drawMainConnections(json) {
       var h = y2-y1;
 
       // bounding rect
-      R.rect(x1+5, y1, x2-x1-10, y2-y1).attr({fill: '#ccc', 'fill-opacity': .5, 'stroke-opacity': 1, 'stroke-width': .25});
-
-      plf1 = section.departure.platform;
-      if (plf1) {
-        // use getBBox for rect dims: http://raphaeljs.com/reference.html#Element.getBBox
-        R.rect( x1+8, y1+4, 12, 12 ).attr({fill: '#cc0', 'fill-opacity': .5});
-        R.text( x1+10, y1+10, plf1 ).attr({'font': '9px "Arial"', fill: '#333', 'text-anchor': 'start'});
-      }
-
-      plf2 = section.arrival.platform;
-      if (plf2 && h>30) {
-        // use getBBox for rect dims: http://raphaeljs.com/reference.html#Element.getBBox
-        R.rect( x1+8, y2-4-12, 12, 12 ).attr({fill: '#ccc', 'fill-opacity': .5});
-        R.text( x1+10, y2-10, plf2 ).attr({'font': '9px "Arial"', fill: "#333", 'text-anchor': 'start'});
-      }
-
-      if (h > 30) {
-        stn1 = section.departure.station.name;
-        R.text( x2-8, y1+20, stn1 ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'end'});
-        stn2 = section.arrival.station.name;
-        R.text( x2-8, y2-20, stn2 ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'end'});
-      }
-
-      R.text( x2-8, y1+6, date1.format('HH:MM') ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'end'});
-      R.text( x2-8, y2-6, date2.format('HH:MM') ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'end'});
+      R.rect(x1+5, y1, x2-x1-10, y2-y1)
+        .attr({fill: '#cc6', 'fill-opacity': .4, 'stroke-opacity': 1, 'stroke-width': .5});
+      //.node.setAttribute('class', 'trsection');
 
       train = section.journey.category;
-      R.text( avg(x1,x2), avg(y1,y2), train ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'middle'});
+      R.text( avg(x1,x2), avg(y1,y2), train )
+        .attr({"font": '14px "Arial"', fill: '#CCCC66', 'text-anchor': 'middle'});
+      //.node.setAttribute('class', 'trcat');
+
+      my = section.departure.platform;
+      var my = y1;
+      var plf1 = section.departure.platform;
+      if (plf1)
+        my = drawPlatform(true, x1, y1, y2, plf1);
+      var plf2 = section.arrival.platform;
+      if (plf2)
+        drawPlatform(false, x1, my, y2, plf2);
+
+      my = avg(y1, y2);
+      drawTimePlace(x2, y1, my, section.departure.station.name, date1);
+      drawTimePlace(x2, y2, my, section.arrival.station.name,   date2);
 
       console.log( '    ' + sid + ': ', section, section.departure, section.arrival );
     }
   }
+}
 
+function drawPlatform(istop, x1, y1, y2, plf) {
+  // use getBBox for rect dims: http://raphaeljs.com/reference.html#Element.getBBox
+
+  if (y1+15 > y2) return;
+
+  var r = R.rect( x1+8, y1+4, 12, 12 )
+    .attr({fill: (istop?'#cc0':'#ccc'), 'fill-opacity': .5});
+  //r.node.setAttribute('class', 'trfrbox');
+  var t = R.text( x1+12, (istop?y1+10:y2-10), plf )
+    .attr({'font': '9px "Arial"', fill: '#000', 'text-anchor': 'start'});
+  //t.node.setAttribute('class', 'trfrtxt');
+
+  var bb = t.getBBox();
+  r.attr({x: bb.x-3, y: bb.y, width: bb.width+6, height: bb.height+1});
+
+  return bb.y + bb.height;
+}
+
+function drawTimePlace(x2, y, my, station, date) {
+  var t;
+
+  if (y > my && y-my < 20)
+    return;
+
+  t = R.text( x2-8, (y<my?y+7:y-7), date.format('H:MM') )
+    .attr({"font": '11px "Arial"', fill: "#222", 'text-anchor': 'end'});
+  //t.node.setAttribute('class', 'trfrtm');
+
+  if (Math.abs(y-my) < 20)
+    return;
+
+  t = R.text( x2-8, (y<my?y+20:y-20), station )
+    .attr({"font": '9px "Arial"', fill: "#222", 'text-anchor': 'end'});
+  //t.node.setAttribute('class', 'trftst');
+}
+
+function drawGrid() {
   var y = Math.round((tMin - tOff) * tScale);
 
   var sI = NaN, lI = NaN;
@@ -154,12 +189,14 @@ function drawMainConnections(json) {
     if (y2-y >= 15 && isNaN(sI) ) sI = interval;
   }
 
+  var d = new Date(tMin)
+
   // thin lines
   t = d.getTime();
   for ( ; t<tMax+sI; t+=sI ) {
     var y = Math.round((t - tOff) * tScale);
     //R.line( 50, y, ww, y );
-    //R.path('M50,'+y+'L'+ww+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .5});
+    //R.path('M35,'+y+'L'+ww+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .5});
   }
 
   // thick lines with labels
@@ -168,7 +205,7 @@ function drawMainConnections(json) {
     var y = Math.round((t - tOff) * tScale);
     d = new Date(t);
     R.text( 5, y, d.format('HH:MM') ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'start'});
-    R.path('M50,'+y+'L'+ww+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .25});
+    R.path('M35,'+y+'L'+ww+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .25});
   }
 }
 

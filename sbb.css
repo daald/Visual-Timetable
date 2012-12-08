@@ -1,0 +1,26 @@
+
+body {
+	font-family: Arial;
+}
+
+
+/* SVG Part */
+.trsection {
+	/*fill: #ccc;*/
+	fill-opacity: .9;
+	stroke-opacity: 1;
+	stroke-width: .25
+}
+
+/*
+.trfrbox {	fill: #cccc00; fill-opacity: .5	}
+.trfrtxt {	font: 9px "Arial"; fill: #333; text-anchor: start	}
+.trtobox {	fill: #ccc; fill-opacity: .5	}
+.trtotxt {	font: 9px "Arial"; fill: #333; text-anchor: start	}
+
+.trfrst {	font: 9px "Arial"; fill: #333; text-anchor: end	}
+.trtost {	font: 9px "Arial"; fill: #333; text-anchor: end	}
+.trfrtm {	font: 9px "Arial"; fill: #333; text-anchor: end	}
+.trtotm {	font: 9px "Arial"; fill: #333; text-anchor: end	}
+.trcat {	font: 9px "Arial"; fill: #333; text-anchor: middle	}
+*/
