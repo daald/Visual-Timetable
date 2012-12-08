@@ -2,8 +2,8 @@
 
 
 //////////////////////////////////////// MINI LIB
-function avg(v1, v2) {
-  return (v2 - v1) / 2 + v1;
+function avg(v1, v2, w=.5) {
+  return (v2 - v1) * w + v1;
 }
 
 //////////////////////////////////////// START FUNCTION
@@ -11,6 +11,15 @@ $(function(){
   //$('#userInput').submit(function() {
   $('input[type=submit]').click(function(event) {
     event.preventDefault();
+
+    updateGraphics();
+  });
+  $('input[type=button]').click(function(event) {
+    var from = $('[name=from]');
+    var to   = $('[name=to]'  );
+    var tmp = from.val();
+    from.val(to.val());
+    to.val(tmp);
 
     updateGraphics();
   });
@@ -116,19 +125,20 @@ function drawMainConnections(json) {
         .attr({fill: '#cc6', 'fill-opacity': .4, 'stroke-opacity': 1, 'stroke-width': .5});
       //.node.setAttribute('class', 'trsection');
 
-      train = section.journey.category;
-      R.text( avg(x1,x2), avg(y1,y2), train )
-        .attr({"font": '14px "Arial"', fill: '#CCCC66', 'text-anchor': 'middle'});
+      R.text( avg(x1,x2), avg(y1,y2, (Math.abs(y1-y2)>40?.4:.5)), section.journey.category )
+        .attr({font: '14px "Arial"', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'});
       //.node.setAttribute('class', 'trcat');
+      if (Math.abs(y1-y2)>50)
+        R.text( avg(x1,x2), avg(y1,y2,.4)+17, section.journey.number )
+          .attr({font: '10px "Arial"', fill: '#CCCC66', 'text-anchor': 'middle'});
 
-      my = section.departure.platform;
-      var my = y1;
+      var my = avg(y1, y2);
       var plf1 = section.departure.platform;
       if (plf1)
-        my = drawPlatform(true, x1, y1, y2, plf1);
+        drawPlatform(x1, y1, my, plf1);
       var plf2 = section.arrival.platform;
       if (plf2)
-        drawPlatform(false, x1, my, y2, plf2);
+        drawPlatform(x1, y2, my, plf2);
 
       my = avg(y1, y2);
       drawTimePlace(x2, y1, my, section.departure.station.name, date1);
@@ -139,22 +149,21 @@ function drawMainConnections(json) {
   }
 }
 
-function drawPlatform(istop, x1, y1, y2, plf) {
-  // use getBBox for rect dims: http://raphaeljs.com/reference.html#Element.getBBox
+function drawPlatform(x1, y, my, plf) {
+  if (y > my && y-my < 15)
+    return;
 
-  if (y1+15 > y2) return;
-
-  var r = R.rect( x1+8, y1+4, 12, 12 )
-    .attr({fill: (istop?'#cc0':'#ccc'), 'fill-opacity': .5});
+  // we draw the rect first because of zorder
+  var r = R.rect( x1+8, y+4, 12, 12 )
+    .attr({fill: (y<my?'#cc0':'#ccc'), 'fill-opacity': .5});
   //r.node.setAttribute('class', 'trfrbox');
-  var t = R.text( x1+12, (istop?y1+10:y2-10), plf )
+  var t = R.text( x1+12, (y<my?y+10:y-10), plf )
     .attr({'font': '9px "Arial"', fill: '#000', 'text-anchor': 'start'});
   //t.node.setAttribute('class', 'trfrtxt');
 
+  // use getBBox for rect dims: http://raphaeljs.com/reference.html#Element.getBBox
   var bb = t.getBBox();
   r.attr({x: bb.x-3, y: bb.y, width: bb.width+6, height: bb.height+1});
-
-  return bb.y + bb.height;
 }
 
 function drawTimePlace(x2, y, my, station, date) {
