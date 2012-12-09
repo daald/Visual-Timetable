@@ -8,11 +8,12 @@ function avg(v1, v2, w=.5) {
 
 //////////////////////////////////////// START FUNCTION
 $(function(){
+  var board = new TimeTableBoard();
   //$('#userInput').submit(function() {
   $('input[type=submit]').click(function(event) {
     event.preventDefault();
 
-    updateGraphics();
+    board.init();
   });
   $('input[type=button]').click(function(event) {
     var from = $('[name=from]');
@@ -21,42 +22,47 @@ $(function(){
     from.val(to.val());
     to.val(tmp);
 
-    updateGraphics();
+    board.init();
   });
 
   // initial display
-  updateGraphics();
+  board.init();
 });
 
 
-//////////////////////////////////////// VARIABLES
-var hh = 480;
-var ww = 640;
-var R;
-var tMin, tMax;
-var tOff, tScale;
-var ox1;
-
-//////////////////////////////////////// OUTPUT ENTRY POINT
-function updateGraphics() {
+/*******************************************************************************
+ *** TimeTableBoard object
+ */
+function TimeTableBoard() {
+  this.h = 480;
+  this.w = 640;
   $('#timetable').empty();
-  R = Raphael('timetable', ww, hh);
+  this.R = Raphael('timetable', this.w, this.h);
 
-  var from = $('[name=from]').val();
-  var to   = $('[name=to]'  ).val();
-  var date = $('[name=date]').val();
-  var time = $('[name=time]').val();
+  //var tMin, tMax;
+  //var tOff, tScale;
+  //var ox1;
+}
 
+TimeTableBoard.prototype.init = function() {
+  $('#timetable').empty();
+  this.R = Raphael('timetable', this.w, this.h);
+
+  this.from = $('[name=from]').val();
+  this.to   = $('[name=to]'  ).val();
+  this.date = $('[name=date]').val();
+  this.time = $('[name=time]').val();
+
+  var ajaxData = 'from='+this.from+'&to='+this.to+'&date=2012-12-10&time='+this.time+'&limit=5'
+  var tthis = this;
   $.ajax({
     type: 'GET',
-    url: 'http://transport.opendata.ch/v1/connections', data: 'from='+from+'&to='+to+'&date=2012-12-10&time='+time+'&limit=5'
+    url: 'http://transport.opendata.ch/v1/connections', data: ajaxData
   }).done( function(msg) {
     json = JSON.parse(msg);
     console.log(json);
 
-    drawMainConnections(json)
-
-    //alert( "Data Saved: " + json );
+    tthis.drawMainConnections(json)
   }).fail( function( xmlHttpRequest, statusText, errorThrown ) {
     alert(
       "Your form submission failed.\n\n"
@@ -66,44 +72,41 @@ function updateGraphics() {
   });
 }
 
-//////////////////////////////////////// OUTPUT DATA CALLBACK
-
-
-function drawMainConnections(json) {
+TimeTableBoard.prototype.drawMainConnections = function(json) {
   conns = new Array();
 
   connections = json.connections;
   console.log('connections', connections);
 
   // Get dimensions
-  tMin = NaN;
-  tMax = NaN;
+  this.tMin = NaN;
+  this.tMax = NaN;
   for ( var cid in connections ) {
     connection = connections[cid];
     console.log( cid + ': ', connection );
 
-    conn = new Connection(connection)
+    conn = new Connection(this, connection)
     conns.push(conn);
 
-    if (isNaN(tMin) || tMin > conn.from) tMin = conn.from;
-    if (isNaN(tMax) || tMax < conn.to)   tMax = conn.to;
+    if (isNaN(this.tMin) || this.tMin > conn.from) this.tMin = conn.from;
+    if (isNaN(this.tMax) || this.tMax < conn.to)   this.tMax = conn.to;
   }
-  console.log('tMin', tMin);
-  console.log('tMax', tMax);
+  console.log('tMin', this.tMin);
+  console.log('tMax', this.tMax);
 
-  var d = new Date(tMin)
+  var d = new Date(this.tMin)
   d.setMinutes(Math.floor(d.getMinutes()/30)*30)
   d.setSeconds(0)
   d.setMilliseconds(0)
-  tMin = d.getTime();
-  console.log('tMin2', tMin);
+  this.tMin = d.getTime();
+  console.log('tMin2', this.tMin);
 
-  ox1 = 40;
+  this.ox1 = 40;
 
-  tOff = tMin;
-  tScale = hh / (tMax-tMin);
+  this.tOff = this.tMin;
+  this.tScale = this.h / (this.tMax-this.tMin);
 
-  drawGrid()
+  this.drawGrid()
 
 
   for ( var cid in conns ) {
@@ -112,14 +115,48 @@ function drawMainConnections(json) {
   }
 }
 
+TimeTableBoard.prototype.drawGrid = function() {
+  var y = Math.round((this.tMin - this.tOff) * this.tScale);
+
+  var sI = NaN, lI = NaN;
+
+  var intervals = [10, 15, 30, 60];
+  var interval;
+  for (i in intervals ) {
+    interval = intervals[i]*60000;
+    var y2 = Math.round((this.tMin + interval - this.tOff) * this.tScale);
+    if (y2-y >= 25 && isNaN(lI) ) lI = interval;
+    if (y2-y >= 15 && isNaN(sI) ) sI = interval;
+  }
+
+  var d = new Date(this.tMin)
+
+  // thin lines
+  t = d.getTime();
+  for ( ; t<this.tMax+sI; t+=sI ) {
+    var y = Math.round((t - this.tOff) * this.tScale);
+    //R.line( 50, y, ww, y );
+    //R.path('M35,'+y+'L'+ww+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .5});
+  }
+
+  // thick lines with labels
+  t = d.getTime();
+  for ( ; t<this.tMax+lI; t+=lI ) {
+    var y = Math.round((t - this.tOff) * this.tScale);
+    d = new Date(t);
+    this.R.text( 5, y, d.format('HH:MM') ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'start'});
+    this.R.path('M35,'+y+'L'+this.w+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .25});
+  }
+}
 
 
 /*******************************************************************************
  *** Connection object
  */
 
-function Connection(jsonConnection) {
-  this.conn = jsonConnection;
+function Connection(board, jsonConnection) {
+  this.board = board;
+  this.conn  = jsonConnection;
 
   var d = new Date();
   d.setISO8601( this.conn.from.departure );
@@ -128,13 +165,20 @@ function Connection(jsonConnection) {
   this.to = d.getTime();
 }
 
+Connection.prototype.R = function(col) {
+  return this.board.R;
+}
+
 Connection.prototype.draw = function(col) {
   console.log( 'conn: ', this.conn );
 
   this.col = col;
 
-  x1 = ox1 +  parseInt(col)   *100 + 5;
-  x2 = ox1 + (parseInt(col)+1)*100 - 5;
+  var R = this.R();
+  var board = this.board;
+
+  var x1 = board.ox1 +  parseInt(col)   *100 + 5;
+  var x2 = board.ox1 + (parseInt(col)+1)*100 - 5;
 
   sections = this.conn.sections
   for ( var sid in sections ) {
@@ -142,10 +186,10 @@ Connection.prototype.draw = function(col) {
 
     var date1 = new Date();
     date1.setISO8601( section.departure.departure );
-    var y1 = Math.round((date1.getTime() - tOff) * tScale);
+    var y1 = Math.round((date1.getTime() - board.tOff) * board.tScale);
     var date2 = new Date();
     date2.setISO8601( section.arrival.arrival );
-    var y2 = Math.round((date2.getTime() - tOff) * tScale);
+    var y2 = Math.round((date2.getTime() - board.tOff) * board.tScale);
     var h = y2-y1;
 
     // bounding rect
@@ -180,6 +224,8 @@ Connection.prototype.drawPlatform = function(x1, y, my, plf) {
   if (y > my && y-my < 15)
     return;
 
+  var R = this.R();
+
   // we draw the rect first because of zorder
   var r = R.rect( x1+8, y+4, 12, 12 )
     .attr({fill: (y<my?'#cc0':'#ccc'), 'fill-opacity': .5});
@@ -199,6 +245,8 @@ Connection.prototype.drawTimePlace = function(x2, y, my, station, date) {
   if (y > my && y-my < 20)
     return;
 
+  var R = this.R();
+
   t = R.text( x2-8, (y<my?y+7:y-7), date.format('H:MM') )
     .attr({"font": '11px "Arial"', fill: "#222", 'text-anchor': 'end'});
   //t.node.setAttribute('class', 'trfrtm');
@@ -209,40 +257,6 @@ Connection.prototype.drawTimePlace = function(x2, y, my, station, date) {
   t = R.text( x2-8, (y<my?y+20:y-20), station )
     .attr({"font": '9px "Arial"', fill: "#222", 'text-anchor': 'end'});
   //t.node.setAttribute('class', 'trftst');
-}
-
-function drawGrid() {
-  var y = Math.round((tMin - tOff) * tScale);
-
-  var sI = NaN, lI = NaN;
-
-  var intervals = [10, 15, 30, 60];
-  var interval;
-  for (i in intervals ) {
-    interval = intervals[i]*60000;
-    var y2 = Math.round((tMin + interval - tOff) * tScale);
-    if (y2-y >= 25 && isNaN(lI) ) lI = interval;
-    if (y2-y >= 15 && isNaN(sI) ) sI = interval;
-  }
-
-  var d = new Date(tMin)
-
-  // thin lines
-  t = d.getTime();
-  for ( ; t<tMax+sI; t+=sI ) {
-    var y = Math.round((t - tOff) * tScale);
-    //R.line( 50, y, ww, y );
-    //R.path('M35,'+y+'L'+ww+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .5});
-  }
-
-  // thick lines with labels
-  t = d.getTime();
-  for ( ; t<tMax+lI; t+=lI ) {
-    var y = Math.round((t - tOff) * tScale);
-    d = new Date(t);
-    R.text( 5, y, d.format('HH:MM') ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'start'});
-    R.path('M35,'+y+'L'+ww+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .25});
-  }
 }
 
 /******************************************************************************/
