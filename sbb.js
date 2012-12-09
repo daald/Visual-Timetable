@@ -35,6 +35,7 @@ var ww = 640;
 var R;
 var tMin, tMax;
 var tOff, tScale;
+var ox1;
 
 //////////////////////////////////////// OUTPUT ENTRY POINT
 function updateGraphics() {
@@ -66,7 +67,11 @@ function updateGraphics() {
 }
 
 //////////////////////////////////////// OUTPUT DATA CALLBACK
+
+
 function drawMainConnections(json) {
+  conns = new Array();
+
   connections = json.connections;
   console.log('connections', connections);
 
@@ -76,11 +81,12 @@ function drawMainConnections(json) {
   for ( var cid in connections ) {
     connection = connections[cid];
     console.log( cid + ': ', connection );
-    var d = new Date();
-    d.setISO8601( connection.from.departure );
-    if (isNaN(tMin) || tMin > d.getTime()) tMin = d.getTime();
-    d.setISO8601( connection.to.arrival );
-    if (isNaN(tMax) || tMax < d.getTime()) tMax = d.getTime();
+
+    conn = new Connection(connection)
+    conns.push(conn);
+
+    if (isNaN(tMin) || tMin > conn.from) tMin = conn.from;
+    if (isNaN(tMax) || tMax < conn.to)   tMax = conn.to;
   }
   console.log('tMin', tMin);
   console.log('tMax', tMax);
@@ -92,64 +98,85 @@ function drawMainConnections(json) {
   tMin = d.getTime();
   console.log('tMin2', tMin);
 
-  var ox1 = 40;
+  ox1 = 40;
 
   tOff = tMin;
   tScale = hh / (tMax-tMin);
 
   drawGrid()
 
-  for ( var cid in connections ) {
-    connection = connections[cid];
-    console.log( cid + ': ', connection );
 
-    x1 = ox1 +  parseInt(cid)   *100 + 5;
-    x2 = ox1 + (parseInt(cid)+1)*100 - 5;
-
-    //R.rect(x1, 0, x2-x1, hh);
-
-    sections = connection.sections
-    for ( var sid in sections ) {
-      section = sections[sid];
-
-      var date1 = new Date();
-      date1.setISO8601( section.departure.departure );
-      var y1 = Math.round((date1.getTime() - tOff) * tScale);
-      var date2 = new Date();
-      date2.setISO8601( section.arrival.arrival );
-      var y2 = Math.round((date2.getTime() - tOff) * tScale);
-      var h = y2-y1;
-
-      // bounding rect
-      R.rect(x1+5, y1, x2-x1-10, y2-y1)
-        .attr({fill: '#cc6', 'fill-opacity': .4, 'stroke-opacity': 1, 'stroke-width': .5});
-      //.node.setAttribute('class', 'trsection');
-
-      R.text( avg(x1,x2), avg(y1,y2, (Math.abs(y1-y2)>40?.4:.5)), section.journey.category )
-        .attr({font: '14px "Arial"', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'});
-      //.node.setAttribute('class', 'trcat');
-      if (Math.abs(y1-y2)>50)
-        R.text( avg(x1,x2), avg(y1,y2,.4)+17, section.journey.number )
-          .attr({font: '10px "Arial"', fill: '#CCCC66', 'text-anchor': 'middle'});
-
-      var my = avg(y1, y2);
-      var plf1 = section.departure.platform;
-      if (plf1)
-        drawPlatform(x1, y1, my, plf1);
-      var plf2 = section.arrival.platform;
-      if (plf2)
-        drawPlatform(x1, y2, my, plf2);
-
-      my = avg(y1, y2);
-      drawTimePlace(x2, y1, my, section.departure.station.name, date1);
-      drawTimePlace(x2, y2, my, section.arrival.station.name,   date2);
-
-      console.log( '    ' + sid + ': ', section, section.departure, section.arrival );
-    }
+  for ( var cid in conns ) {
+    conn = conns[cid];
+    conn.draw(cid);
   }
 }
 
-function drawPlatform(x1, y, my, plf) {
+
+
+/*******************************************************************************
+ *** Connection object
+ */
+
+function Connection(jsonConnection) {
+  this.conn = jsonConnection;
+
+  var d = new Date();
+  d.setISO8601( this.conn.from.departure );
+  this.from = d.getTime();
+  d.setISO8601( this.conn.to.arrival );
+  this.to = d.getTime();
+}
+
+Connection.prototype.draw = function(col) {
+  console.log( 'conn: ', this.conn );
+
+  this.col = col;
+
+  x1 = ox1 +  parseInt(col)   *100 + 5;
+  x2 = ox1 + (parseInt(col)+1)*100 - 5;
+
+  sections = this.conn.sections
+  for ( var sid in sections ) {
+    section = sections[sid];
+
+    var date1 = new Date();
+    date1.setISO8601( section.departure.departure );
+    var y1 = Math.round((date1.getTime() - tOff) * tScale);
+    var date2 = new Date();
+    date2.setISO8601( section.arrival.arrival );
+    var y2 = Math.round((date2.getTime() - tOff) * tScale);
+    var h = y2-y1;
+
+    // bounding rect
+    R.rect(x1+5, y1, x2-x1-10, y2-y1)
+      .attr({fill: '#cc6', 'fill-opacity': .4, 'stroke-opacity': 1, 'stroke-width': .5});
+    //.node.setAttribute('class', 'trsection');
+
+    R.text( avg(x1,x2), avg(y1,y2, (Math.abs(y1-y2)>40?.4:.5)), section.journey.category )
+      .attr({font: '14px "Arial"', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'});
+    //.node.setAttribute('class', 'trcat');
+    if (Math.abs(y1-y2)>50)
+      R.text( avg(x1,x2), avg(y1,y2,.4)+17, section.journey.number )
+        .attr({font: '10px "Arial"', fill: '#CCCC66', 'text-anchor': 'middle'});
+
+    var my = avg(y1, y2);
+    var plf1 = section.departure.platform;
+    if (plf1)
+      this.drawPlatform(x1, y1, my, plf1);
+    var plf2 = section.arrival.platform;
+    if (plf2)
+      this.drawPlatform(x1, y2, my, plf2);
+
+    my = avg(y1, y2);
+    this.drawTimePlace(x2, y1, my, section.departure.station.name, date1);
+    this.drawTimePlace(x2, y2, my, section.arrival.station.name,   date2);
+
+    console.log( '    ' + sid + ': ', section, section.departure, section.arrival );
+  }
+}
+
+Connection.prototype.drawPlatform = function(x1, y, my, plf) {
   if (y > my && y-my < 15)
     return;
 
@@ -166,7 +193,7 @@ function drawPlatform(x1, y, my, plf) {
   r.attr({x: bb.x-3, y: bb.y, width: bb.width+6, height: bb.height+1});
 }
 
-function drawTimePlace(x2, y, my, station, date) {
+Connection.prototype.drawTimePlace = function(x2, y, my, station, date) {
   var t;
 
   if (y > my && y-my < 20)
@@ -217,4 +244,6 @@ function drawGrid() {
     R.path('M35,'+y+'L'+ww+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .25});
   }
 }
+
+/******************************************************************************/
 
