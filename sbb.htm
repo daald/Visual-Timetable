@@ -11,19 +11,32 @@
         <link rel="stylesheet" type="text/css" href="sbb.css" />
     </head>
     <body>
-        <div>
-            <form name="userInput">
-              From: <input name="from" value="Zürich Hardbrücke"/>
-              To: <input name="to" value="Schaffhausen"/>
-              Date: <input name="date" value="10.12.2012"/>
-              Time: <input name="time" value="19:00"/>
-              <input type="submit" value="Update"/>
-              <input type="button" value="<->"/>
-            </form>
-        </div>
-        <div id="timetable">
-            Your browser has a JavaScript problem
-        </div>
+      <div>
+        <form name="userInput">
+          <table>
+            <tr>
+              <td>Connecting before:</td><td>From: <input name="connFrom" value=""/></td>
+            </tr>
+            <tr>
+              <td>Main connection:</td>
+              <td>
+                From: <input name="from" value="Zürich Hardbrücke"/>
+                To: <input name="to" value="Schaffhausen"/>
+                Date: <input name="date" value="10.12.2012"/>
+                Time: <input name="time" value="19:00"/>
+              </td>
+            </tr>
+            <tr>
+              <td>Connecting after:</td><td>To: <input name="connTo" value=""/></td>
+            </tr>
+          </table>
+          <p><input type="submit" value="Update"/>
+            <input type="button" value="<->"/></p>
+        </form>
+      </div>
+      <div id="timetable">
+          Your browser has a JavaScript problem
+      </div>
     </body>
 </html>
 

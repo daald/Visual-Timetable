@@ -39,6 +39,9 @@ function TimeTableBoard() {
   $('#timetable').empty();
   this.R = Raphael('timetable', this.w, this.h);
 
+  this.connsBefore = [];
+  this.connsAfter  = [];
+
   //var tMin, tMax;
   //var tOff, tScale;
   //var ox1;
@@ -53,7 +56,7 @@ TimeTableBoard.prototype.init = function() {
   this.date = $('[name=date]').val();
   this.time = $('[name=time]').val();
 
-  var ajaxData = 'from='+this.from+'&to='+this.to+'&date=2012-12-10&time='+this.time+'&limit=5'
+  var ajaxData = 'from='+this.from+'&to='+this.to+'&date=2012-12-10&time='+this.time+'&limit=6'
   var tthis = this;
   $.ajax({
     type: 'GET',
@@ -62,7 +65,7 @@ TimeTableBoard.prototype.init = function() {
     json = JSON.parse(msg);
     console.log(json);
 
-    tthis.drawMainConnections(json)
+    tthis.handleMainConns(json)
   }).fail( function( xmlHttpRequest, statusText, errorThrown ) {
     alert(
       "Your form submission failed.\n\n"
@@ -72,8 +75,8 @@ TimeTableBoard.prototype.init = function() {
   });
 }
 
-TimeTableBoard.prototype.drawMainConnections = function(json) {
-  conns = new Array();
+TimeTableBoard.prototype.handleMainConns = function(json) {
+  this.conns = new Array();
 
   connections = json.connections;
   console.log('connections', connections);
@@ -81,18 +84,25 @@ TimeTableBoard.prototype.drawMainConnections = function(json) {
   // Get dimensions
   this.tMin = NaN;
   this.tMax = NaN;
+  var maxMin = NaN;
+  var minMax = NaN;
   for ( var cid in connections ) {
     connection = connections[cid];
     console.log( cid + ': ', connection );
 
     conn = new Connection(this, connection)
-    conns.push(conn);
+    this.conns.push(conn);
 
-    if (isNaN(this.tMin) || this.tMin > conn.from) this.tMin = conn.from;
-    if (isNaN(this.tMax) || this.tMax < conn.to)   this.tMax = conn.to;
+    if (isNaN(this.tMin) || this.tMin > conn.tMin) this.tMin = conn.tMin;
+    if (isNaN(this.tMax) || this.tMax < conn.tMax)   this.tMax = conn.tMax;
+    if (isNaN(maxMin) || maxMin < conn.tMin) maxMin = conn.tMin;
+    if (isNaN(minMax) || minMax > conn.tMax)   minMax = conn.tMax;
   }
   console.log('tMin', this.tMin);
   console.log('tMax', this.tMax);
+
+  this.getConnConns(true,  this.tMin, maxMin);
+  this.getConnConns(false, minMax, this.tMax);
 
   var d = new Date(this.tMin)
   d.setMinutes(Math.floor(d.getMinutes()/30)*30)
@@ -108,10 +118,86 @@ TimeTableBoard.prototype.drawMainConnections = function(json) {
 
   this.drawGrid()
 
-
-  for ( var cid in conns ) {
-    conn = conns[cid];
+  for ( var cid in this.conns ) {
+    var conn = this.conns[cid];
     conn.draw(cid);
+  }
+}
+
+TimeTableBoard.prototype.getConnConns = function(isBefore, tMin, tMax) {
+  this.connFrom = $('[name=connFrom]').val();
+  this.connTo   = $('[name=connTo]'  ).val();
+
+  var date1 = new Date(tMin-0);//FIXME
+  var tMinStr = date1.format('HH:MM')
+  var dMinStr = date1.format('yyyy-mm-dd')
+
+  if (isBefore) {
+    if (!this.connFrom) return;
+    var ajaxData = 'from='+this.connFrom+'&to='+this.from+'&date='+dMinStr+'&time='+tMinStr+'&limit=5'
+  } else {
+    if (!this.connTo) return;
+    var ajaxData = 'from='+this.to+'&to='+this.connTo+'&date='+dMinStr+'&time='+tMinStr+'&limit=5'
+  }
+
+  console.log('[ajax]', ajaxData);
+
+  var tthis = this;
+  $.ajax({
+    type: 'GET',
+    url: 'http://transport.opendata.ch/v1/connections', data: ajaxData
+  }).done( function(msg) {
+    json = JSON.parse(msg);
+    console.log(json);
+
+    tthis.handleConnConns(isBefore, tMax, json)
+  }).fail( function( xmlHttpRequest, statusText, errorThrown ) {
+    alert(
+      "Your form submission failed.\n\n"
+        + "XML Http Request: " + JSON.stringify( xmlHttpRequest )
+        + ",\nStatus Text: " + statusText
+        + ",\nError Thrown: " + errorThrown );
+  });
+}
+
+TimeTableBoard.prototype.handleConnConns = function(isBefore, tMax, json) {
+  var conns = isBefore?this.connsBefore:this.connsAfter; // conns is a hash
+
+  connections = json.connections;
+  console.log('[b.hcc] before', isBefore);
+  console.log('[b.hcc] connections', connections);
+
+  // Get dimensions
+  var tMin = NaN;
+  var tMax = NaN;
+  for ( var cid in connections ) {
+    connection = connections[cid];
+    console.log('[b.hcc]', cid + ': ', connection );
+
+    conn = new Connection(this, connection)
+    var t = isBefore?conn.tMax:conn.tMin;
+    conn.t = t;
+
+    if (isNaN(tMin) || tMin > t) tMin = t;
+    if (isNaN(tMax) || tMax < t) tMax = t;
+
+    //if (conns[t] && conns[t].tMax-conns[t].tMin < conn.tMax-conn.tMin)
+    //  continue // keep faster connections
+    //else
+    conns.push(conn);
+  }
+  console.log('[b.hcc] tMin', tMin);
+  console.log('[b.hcc] tMax', tMax);
+  console.log('[b.hcc] conns', conns);
+
+  if (isBefore)
+    this.connsBefore = conns;
+  else
+    this.connsAfter = conns;
+
+  for ( var cid in this.conns ) {
+    var conn = this.conns[cid];
+    conn.findConnConn(isBefore, conns);
   }
 }
 
@@ -160,17 +246,51 @@ function Connection(board, jsonConnection) {
 
   var d = new Date();
   d.setISO8601( this.conn.from.departure );
-  this.from = d.getTime();
+  this.tMin = d.getTime();
   d.setISO8601( this.conn.to.arrival );
-  this.to = d.getTime();
+  this.tMax = d.getTime();
 }
 
 Connection.prototype.R = function(col) {
   return this.board.R;
 }
 
+Connection.prototype.findConnConn = function(isBefore, conns) {
+  console.log('[c.fcc] ', this, isBefore);
+
+  var space = 0 * 60000;//FIXME
+
+  var tMax = NaN, tMin = NaN;
+  for ( var cid in conns ) {
+    var conn = conns[cid];
+    if (isBefore) {
+      if ((isNaN(tMax) || conn.tMax > tMax) && conn.tMax <= this.tMin - space) {
+        this.cBefore = conn;
+        tMax = conn.tMax;
+      }
+    } else {
+      if ((isNaN(tMin) || conn.tMin < tMin) && conn.tMin >= this.tMax + space) {
+        this.cAfter = conn;
+        tMin = conn.tMin;
+      }
+    }
+  }
+
+  if (isBefore)
+    console.log('[c.fcc] new before', this, this.cBefore);
+  else
+    console.log('[c.fcc] new after', this, this.cAfter);
+
+  // FIXME: only a test
+  if (isBefore) {
+    if (this.cBefore) this.cBefore.draw(this.col);
+  } else {
+    if (this.cAfter) this.cAfter.draw(this.col);
+  }
+}
+
 Connection.prototype.draw = function(col) {
-  console.log( 'conn: ', this.conn );
+  console.log( '[c.d] conn: ', this );
 
   this.col = col;
 
@@ -183,6 +303,11 @@ Connection.prototype.draw = function(col) {
   sections = this.conn.sections
   for ( var sid in sections ) {
     section = sections[sid];
+
+    if (!section.journey && section.walk)
+      continue; // we don't visualize walking
+
+    console.log('[c.d]', sid + ': ', section, section.departure.station.name + '...' + section.arrival.station.name );
 
     var date1 = new Date();
     date1.setISO8601( section.departure.departure );
@@ -197,11 +322,15 @@ Connection.prototype.draw = function(col) {
       .attr({fill: '#cc6', 'fill-opacity': .4, 'stroke-opacity': 1, 'stroke-width': .5});
     //.node.setAttribute('class', 'trsection');
 
-    R.text( avg(x1,x2), avg(y1,y2, (Math.abs(y1-y2)>40?.4:.5)), section.journey.category )
+
+    var jcat = section.journey.category;
+    var jnum = section.journey.number;
+    if (jcat == 'Nbu') jcat = section.journey.name;
+    R.text( avg(x1,x2), avg(y1,y2, (Math.abs(y1-y2)>40?.4:.5)), jcat )
       .attr({font: '14px "Arial"', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'});
     //.node.setAttribute('class', 'trcat');
     if (Math.abs(y1-y2)>50)
-      R.text( avg(x1,x2), avg(y1,y2,.4)+17, section.journey.number )
+      R.text( avg(x1,x2), avg(y1,y2,.4)+17, jnum )
         .attr({font: '10px "Arial"', fill: '#CCCC66', 'text-anchor': 'middle'});
 
     var my = avg(y1, y2);
@@ -215,8 +344,6 @@ Connection.prototype.draw = function(col) {
     my = avg(y1, y2);
     this.drawTimePlace(x2, y1, my, section.departure.station.name, date1);
     this.drawTimePlace(x2, y2, my, section.arrival.station.name,   date2);
-
-    console.log( '    ' + sid + ': ', section, section.departure, section.arrival );
   }
 }
 
