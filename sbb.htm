@@ -4,10 +4,12 @@
         <meta charset="utf-8">
         <title>SBB</title>
         <script type="text/javascript" src="jquery-1.8.3.min.js"></script>
+        <script type="text/javascript" src="jquery-ui-1.9.2.custom.min.js"></script>
         <script type="text/javascript" src="date.format.js"></script>
         <script type="text/javascript" src="date.setISO8601.js"></script>
         <script type="text/javascript" src="raphael-min.js"></script>
         <script type="text/javascript" src="sbb.js"></script>
+	<link href="jquery-ui-1.9.2.custom.css" rel="stylesheet">
         <link rel="stylesheet" type="text/css" href="sbb.css" />
     </head>
     <body>
@@ -15,19 +17,21 @@
         <form name="userInput">
           <table>
             <tr>
-              <td>Connecting before:</td><td>From: <input name="connFrom" value=""/></td>
+              <td>Connection before:</td><td>From:</td><td><input name="connFrom" value="" class="stationfield"/></td>
             </tr>
             <tr>
               <td>Main connection:</td>
-              <td>
-                From: <input name="from" value="Zürich Hardbrücke"/>
-                To: <input name="to" value="Schaffhausen"/>
-                Date: <input name="date" value="10.12.2012"/>
-                Time: <input name="time" value="19:00"/>
+              <td>From:</td><td><input name="from" value="Zürich Hardbrücke" class="stationfield"/></td>
+              <td>Date:</td><td><input name="date" value="10.12.2012"/></td>
+            </tr>
+            <tr>
+              <td></td>
+              <td>To:</td><td><input name="to" value="Schaffhausen" class="stationfield"/></td>
+              <td>Time:</td><td><input name="time" value="19:00"/>
               </td>
             </tr>
             <tr>
-              <td>Connecting after:</td><td>To: <input name="connTo" value=""/></td>
+              <td>Connection after:</td><td>To:</td><td><input name="connTo" value="" class="stationfield"/></td>
             </tr>
           </table>
           <p><input type="submit" value="Update"/>

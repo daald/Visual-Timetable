@@ -8,6 +8,41 @@ function avg(v1, v2, w=.5) {
 
 //////////////////////////////////////// START FUNCTION
 $(function(){
+    // Autocomplete for station fields
+        $( "input.stationfield" ).autocomplete({
+            source: function( request, response ) {
+                $.ajax({
+                    url: "http://transport.opendata.ch/v1/locations",
+                    dataType: "json",
+                    data: {
+                        query: request.term
+                    },
+                    success: function( data ) {
+                        response( $.map( data.stations, function( item ) {
+                            return {
+                                label: item.name,
+                                value: item.name
+                            }
+                        }));
+                    }
+                });
+            },
+            minLength: 3,
+            select: function( event, ui ) {
+                //alert( ui.item ?
+                //    "Selected: " + ui.item.label :
+                //    "Nothing selected, input was " + this.value);
+            },
+            /*open: function() {
+                $( this ).removeClass( "ui-corner-all" ).addClass( "ui-corner-top" );
+            },
+            close: function() {
+                $( this ).removeClass( "ui-corner-top" ).addClass( "ui-corner-all" );
+            }*/
+        });
+
+  // other configurations
+
   var board = new TimeTableBoard();
   //$('#userInput').submit(function() {
   $('input[type=submit]').click(function(event) {
@@ -28,6 +63,41 @@ $(function(){
   // initial display
   board.init();
 });
+
+
+/*******************************************************************************
+ *** TimeTableBoard object
+ */
+function ConnectionLoader(from, to, time, callback) {
+  this.from = from;
+  this.to = to;
+
+  this.load(time, callback);
+}
+
+ConnectionLoader.prototype.load = function(time, callback) {
+  var queryStr = 'from='+this.from+'&to='+this.to+'&date=2012-12-10&time='+time+'&limit=6';
+  var tthis = this;
+  $.ajax({
+    type: 'GET',
+    url: 'http://transport.opendata.ch/v1/connections',
+    dataType: 'json',
+    data: queryStr
+  }).done( function(json) {
+    console.log(json);
+
+    tthis.handleMainConns(json)
+  }).fail( function( xmlHttpRequest, statusText, errorThrown ) {
+    alert(
+      "Your form submission failed.\n\n"
+        + "XML Http Request: " + JSON.stringify( xmlHttpRequest )
+        + ",\nStatus Text: " + statusText
+        + ",\nError Thrown: " + errorThrown );
+  });
+}
+
+ConnectionLoader.prototype.init = function() {
+}
 
 
 /*******************************************************************************
@@ -60,9 +130,10 @@ TimeTableBoard.prototype.init = function() {
   var tthis = this;
   $.ajax({
     type: 'GET',
-    url: 'http://transport.opendata.ch/v1/connections', data: ajaxData
-  }).done( function(msg) {
-    json = JSON.parse(msg);
+    url: 'http://transport.opendata.ch/v1/connections',
+    dataType: 'json',
+    data: ajaxData
+  }).done( function(json) {
     console.log(json);
 
     tthis.handleMainConns(json)
@@ -145,9 +216,10 @@ TimeTableBoard.prototype.getConnConns = function(isBefore, tMin, tMax) {
   var tthis = this;
   $.ajax({
     type: 'GET',
-    url: 'http://transport.opendata.ch/v1/connections', data: ajaxData
-  }).done( function(msg) {
-    json = JSON.parse(msg);
+    url: 'http://transport.opendata.ch/v1/connections',
+    data: ajaxData,
+    dataType: 'json',
+  }).done( function(json) {
     console.log(json);
 
     tthis.handleConnConns(isBefore, tMax, json)
