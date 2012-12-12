@@ -66,16 +66,35 @@ $(function(){
 
 
 /*******************************************************************************
+ *** cache function
+ */
+var cachePool = {};
+function cache(key, value) {
+  if (value === undefined)
+    return cachePool[key];
+
+  cachePool[key] = value;
+}
+
+
+/*******************************************************************************
  *** TimeTableBoard object
  */
-function ConnectionLoader(from, to, time, callback) {
+function ConnectionLoader(from, to, time, dataCallback, nameCallback) {
   this.from = from;
   this.to = to;
+  this.conns = [];
+  this.nameCallback = nameCallback;
+  this.tStartMin = NaN;
+  this.tStartMax = NaN;
+  this.tEndMin = NaN;
+  this.tEndMax = NaN;
 
-  this.load(time, callback);
+  this.load(time, dataCallback);
 }
 
 ConnectionLoader.prototype.load = function(time, callback) {
+  // FIXME time should be a date object instead of string and include the date
   var queryStr = 'from='+this.from+'&to='+this.to+'&date=2012-12-10&time='+time+'&limit=6';
   var tthis = this;
   $.ajax({
@@ -84,9 +103,10 @@ ConnectionLoader.prototype.load = function(time, callback) {
     dataType: 'json',
     data: queryStr
   }).done( function(json) {
-    console.log(json);
+    tthis.handleData(json);
 
-    tthis.handleMainConns(json)
+    //FIXME: callback only a subset of conns
+    if (callback) callback(tthis, tthis.conns);
   }).fail( function( xmlHttpRequest, statusText, errorThrown ) {
     alert(
       "Your form submission failed.\n\n"
@@ -96,7 +116,32 @@ ConnectionLoader.prototype.load = function(time, callback) {
   });
 }
 
-ConnectionLoader.prototype.init = function() {
+ConnectionLoader.prototype.handleData = function(json) {
+  console.log('[L.hd]', json);
+  if (this.nameCallback) {
+    this.from = json.from.name;
+    this.to   = json.to.name;
+    this.nameCallback(this.from, this.to);
+    this.nameCallback = undefined;
+  }
+
+  // create objects, adjust min/max
+  var connections = json.connections;
+  for ( var cid in connections ) {
+    connection = json.connections[cid];
+    console.log('[L.hd]', cid + ': ', connection );
+
+    conn = new Connection(connection)
+    this.conns.push(conn);
+
+    if (isNaN(this.tStartMin) || this.tStartMin > conn.tMin) this.tStartMin = conn.tMin;
+    if (isNaN(this.tStartMax) || this.tStartMax < conn.tMin) this.tStartMax = conn.tMin;
+    if (isNaN(this.tEndMin)   || this.tEndMin   > conn.tMax) this.tEndMin   = conn.tMax;
+    if (isNaN(this.tEndMax)   || this.tEndMax   < conn.tMax) this.tEndMax   = conn.tMax;
+  }
+  console.log('[L.hd] count',   this.conns.length);
+  console.log('[L.hd] tStart*', this.tStartMin, '..', this.tStartMax);
+  console.log('[L.hd] tEnd*',   this.tEndMin,   '..', this.tEndMax);
 }
 
 
@@ -126,51 +171,32 @@ TimeTableBoard.prototype.init = function() {
   this.date = $('[name=date]').val();
   this.time = $('[name=time]').val();
 
-  var ajaxData = 'from='+this.from+'&to='+this.to+'&date=2012-12-10&time='+this.time+'&limit=6'
   var tthis = this;
-  $.ajax({
-    type: 'GET',
-    url: 'http://transport.opendata.ch/v1/connections',
-    dataType: 'json',
-    data: ajaxData
-  }).done( function(json) {
-    console.log(json);
 
-    tthis.handleMainConns(json)
-  }).fail( function( xmlHttpRequest, statusText, errorThrown ) {
-    alert(
-      "Your form submission failed.\n\n"
-        + "XML Http Request: " + JSON.stringify( xmlHttpRequest )
-        + ",\nStatus Text: " + statusText
-        + ",\nError Thrown: " + errorThrown );
-  });
+  new ConnectionLoader(this.from, this.to, this.time,
+    function(loader, conns) {
+      tthis.handleMainConns(loader, conns);
+    },
+    function(from, to) {
+      tthis.from = from;
+      $('[name=from]').val(from);
+      tthis.to = to;
+      $('[name=to]'  ).val(to);
+    }
+  );
 }
 
-TimeTableBoard.prototype.handleMainConns = function(json) {
-  this.conns = new Array();
-
-  connections = json.connections;
-  console.log('connections', connections);
+TimeTableBoard.prototype.handleMainConns = function(loader, conns) {
+  console.log('[B.hmc]');
 
   // Get dimensions
-  this.tMin = NaN;
-  this.tMax = NaN;
-  var maxMin = NaN;
-  var minMax = NaN;
-  for ( var cid in connections ) {
-    connection = connections[cid];
-    console.log( cid + ': ', connection );
-
-    conn = new Connection(this, connection)
-    this.conns.push(conn);
-
-    if (isNaN(this.tMin) || this.tMin > conn.tMin) this.tMin = conn.tMin;
-    if (isNaN(this.tMax) || this.tMax < conn.tMax)   this.tMax = conn.tMax;
-    if (isNaN(maxMin) || maxMin < conn.tMin) maxMin = conn.tMin;
-    if (isNaN(minMax) || minMax > conn.tMax)   minMax = conn.tMax;
-  }
-  console.log('tMin', this.tMin);
-  console.log('tMax', this.tMax);
+  this.tMin = loader.tStartMin;
+  this.tMax = loader.tEndMax;
+  var maxMin = loader.tStartMax;
+  var minMax = loader.tEndMin;
+  this.conns = conns;
+  console.log('[B.hmc] tMin', this.tMin);
+  console.log('[B.hmc] tMax', this.tMax);
 
   this.getConnConns(true,  this.tMin, maxMin);
   this.getConnConns(false, minMax, this.tMax);
@@ -180,7 +206,7 @@ TimeTableBoard.prototype.handleMainConns = function(json) {
   d.setSeconds(0)
   d.setMilliseconds(0)
   this.tMin = d.getTime();
-  console.log('tMin2', this.tMin);
+  console.log('[B.hmc] tMin2', this.tMin);
 
   this.ox1 = 40;
 
@@ -191,7 +217,7 @@ TimeTableBoard.prototype.handleMainConns = function(json) {
 
   for ( var cid in this.conns ) {
     var conn = this.conns[cid];
-    conn.draw(cid);
+    conn.draw(this, cid);
   }
 }
 
@@ -246,7 +272,7 @@ TimeTableBoard.prototype.handleConnConns = function(isBefore, tMax, json) {
     connection = connections[cid];
     console.log('[b.hcc]', cid + ': ', connection );
 
-    conn = new Connection(this, connection)
+    conn = new Connection(connection)
     var t = isBefore?conn.tMax:conn.tMin;
     conn.t = t;
 
@@ -312,19 +338,14 @@ TimeTableBoard.prototype.drawGrid = function() {
  *** Connection object
  */
 
-function Connection(board, jsonConnection) {
-  this.board = board;
-  this.conn  = jsonConnection;
+function Connection(jsonConnection) {
+  this.conn = jsonConnection;
 
   var d = new Date();
   d.setISO8601( this.conn.from.departure );
   this.tMin = d.getTime();
   d.setISO8601( this.conn.to.arrival );
   this.tMax = d.getTime();
-}
-
-Connection.prototype.R = function(col) {
-  return this.board.R;
 }
 
 Connection.prototype.findConnConn = function(isBefore, conns) {
@@ -355,19 +376,19 @@ Connection.prototype.findConnConn = function(isBefore, conns) {
 
   // FIXME: only a test
   if (isBefore) {
-    if (this.cBefore) this.cBefore.draw(this.col);
+    if (this.cBefore) this.cBefore.draw(board, this.col);
   } else {
-    if (this.cAfter) this.cAfter.draw(this.col);
+    if (this.cAfter) this.cAfter.draw(board, this.col);
   }
 }
 
-Connection.prototype.draw = function(col) {
+Connection.prototype.draw = function(board, col) {
   console.log( '[c.d] conn: ', this );
 
   this.col = col;
 
-  var R = this.R();
-  var board = this.board;
+  this.board = board;
+  var R = board.R;
 
   var x1 = board.ox1 +  parseInt(col)   *100 + 5;
   var x2 = board.ox1 + (parseInt(col)+1)*100 - 5;
@@ -423,7 +444,7 @@ Connection.prototype.drawPlatform = function(x1, y, my, plf) {
   if (y > my && y-my < 15)
     return;
 
-  var R = this.R();
+  var R = this.board.R;
 
   // we draw the rect first because of zorder
   var r = R.rect( x1+8, y+4, 12, 12 )
@@ -444,7 +465,7 @@ Connection.prototype.drawTimePlace = function(x2, y, my, station, date) {
   if (y > my && y-my < 20)
     return;
 
-  var R = this.R();
+  var R = this.board.R;
 
   t = R.text( x2-8, (y<my?y+7:y-7), date.format('H:MM') )
     .attr({"font": '11px "Arial"', fill: "#222", 'text-anchor': 'end'});
