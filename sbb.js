@@ -80,7 +80,10 @@ function cache(key, value) {
 /*******************************************************************************
  *** TimeTableBoard object
  */
-function ConnectionLoader(from, to, time, dataCallback, nameCallback) {
+function ConnectionLoader() {
+}
+
+ConnectionLoader.prototype.init = function(from, to, time, dataCallback, nameCallback) {
   this.from = from;
   this.to = to;
   this.conns = [];
@@ -96,17 +99,17 @@ function ConnectionLoader(from, to, time, dataCallback, nameCallback) {
 ConnectionLoader.prototype.load = function(time, callback) {
   // FIXME time should be a date object instead of string and include the date
   var queryStr = 'from='+this.from+'&to='+this.to+'&date=2012-12-10&time='+time+'&limit=6';
-  var tthis = this;
+  var loader = this;
   $.ajax({
     type: 'GET',
     url: 'http://transport.opendata.ch/v1/connections',
     dataType: 'json',
     data: queryStr
   }).done( function(json) {
-    tthis.handleData(json);
+    loader.handleData(json);
 
     //FIXME: callback only a subset of conns
-    if (callback) callback(tthis, tthis.conns);
+    if (callback) callback(loader.conns);
   }).fail( function( xmlHttpRequest, statusText, errorThrown ) {
     alert(
       "Your form submission failed.\n\n"
@@ -171,29 +174,30 @@ TimeTableBoard.prototype.init = function() {
   this.date = $('[name=date]').val();
   this.time = $('[name=time]').val();
 
-  var tthis = this;
+  var board = this;
 
-  new ConnectionLoader(this.from, this.to, this.time,
-    function(loader, conns) {
-      tthis.handleMainConns(loader, conns);
+  this.mainLoader = new ConnectionLoader();
+  this.mainLoader.init(this.from, this.to, this.time,
+    function /* callback */ (conns) {
+      board.handleMainConns(conns);
     },
-    function(from, to) {
-      tthis.from = from;
+    function /* namecorrection */ (from, to) {
+      board.from = from;
       $('[name=from]').val(from);
-      tthis.to = to;
+      board.to = to;
       $('[name=to]'  ).val(to);
     }
   );
 }
 
-TimeTableBoard.prototype.handleMainConns = function(loader, conns) {
+TimeTableBoard.prototype.handleMainConns = function(conns) {
   console.log('[B.hmc]');
 
   // Get dimensions
-  this.tMin = loader.tStartMin;
-  this.tMax = loader.tEndMax;
-  var maxMin = loader.tStartMax;
-  var minMax = loader.tEndMin;
+  this.tMin = this.mainLoader.tStartMin;
+  this.tMax = this.mainLoader.tEndMax;
+  var maxMin = this.mainLoader.tStartMax;
+  var minMax = this.mainLoader.tEndMin;
   this.conns = conns;
   console.log('[B.hmc] tMin', this.tMin);
   console.log('[B.hmc] tMax', this.tMax);
@@ -226,78 +230,111 @@ TimeTableBoard.prototype.getConnConns = function(isBefore, tMin, tMax) {
   this.connTo   = $('[name=connTo]'  ).val();
 
   var date1 = new Date(tMin-0);//FIXME
-  var tMinStr = date1.format('HH:MM')
-  var dMinStr = date1.format('yyyy-mm-dd')
 
-  if (isBefore) {
-    if (!this.connFrom) return;
-    var ajaxData = 'from='+this.connFrom+'&to='+this.from+'&date='+dMinStr+'&time='+tMinStr+'&limit=5'
-  } else {
-    if (!this.connTo) return;
-    var ajaxData = 'from='+this.to+'&to='+this.connTo+'&date='+dMinStr+'&time='+tMinStr+'&limit=5'
-  }
+  var board = this;
 
-  console.log('[ajax]', ajaxData);
+  var minSpace = 3*60000; // [ms]
 
-  var tthis = this;
-  $.ajax({
-    type: 'GET',
-    url: 'http://transport.opendata.ch/v1/connections',
-    data: ajaxData,
-    dataType: 'json',
-  }).done( function(json) {
-    console.log(json);
+  this.beforeLoader = new ConnectionLoader();
+  this.beforeLoader.init(this.connFrom, this.from, date1,
+    function /* callback */ (conns) {
+      console.log('[B.-1.c] connections', conns);
 
-    tthis.handleConnConns(isBefore, tMax, json)
-  }).fail( function( xmlHttpRequest, statusText, errorThrown ) {
-    alert(
-      "Your form submission failed.\n\n"
-        + "XML Http Request: " + JSON.stringify( xmlHttpRequest )
-        + ",\nStatus Text: " + statusText
-        + ",\nError Thrown: " + errorThrown );
-  });
+      board.connectConnections(
+        function /* rateconn */ (mconn, bconn) {
+          if (mconn.tMin - minSpace < bconn.tMax)
+            return -1; // not useable
+
+          return mconn.tMin - minSpace - bconn.tMax; // [ms] of waiting time
+        },
+        function /* compareconns */ (conn1, conn2) {
+          return (conn1.tLength - conn2.tLength);
+        },
+        function /* setconn */ (mconn, bconn) {
+          mconn.cBefore = bconn;
+          bconn.draw(board, cid);
+        }
+      );
+    },
+    function /* namecorrection */ (from, to) {
+      $('[name=connFrom]').val(from);
+    }
+  );
+
+  this.afterLoader = new ConnectionLoader();
+  this.afterLoader.init(this.to, this.connTo, date1,
+    function /* callback */ (conns) {
+      console.log('[B.+1.c] connections', conns);
+
+      board.connectConnections(
+        function /* rateconn */ (mconn, bconn) {
+          if (mconn.tMax + minSpace > bconn.tMin)
+            return -1; // not useable
+
+          return bconn.tMax - (mconn.tMax + minSpace); // [ms] of waiting time
+        },
+        function /* compareconns */ (conn1, conn2) {
+          return (conn1.tLength - conn2.tLength);
+        },
+        function /* setconn */ (mconn, bconn) {
+          mconn.cAfter = bconn;
+          bconn.draw(board, cid);
+        }
+      );
+    },
+    function /* namecorrection */ (from, to) {
+      $('[name=connTo]').val(to);
+    }
+  );
 }
 
-TimeTableBoard.prototype.handleConnConns = function(isBefore, tMax, json) {
-  var conns = isBefore?this.connsBefore:this.connsAfter; // conns is a hash
+TimeTableBoard.prototype.connectConnections = function(fnRateConn, fnCompareConn, fnSetConn) {
+  console.log('[B.cc]');
 
-  connections = json.connections;
-  console.log('[b.hcc] before', isBefore);
-  console.log('[b.hcc] connections', connections);
+  
 
-  // Get dimensions
-  var tMin = NaN;
-  var tMax = NaN;
-  for ( var cid in connections ) {
-    connection = connections[cid];
-    console.log('[b.hcc]', cid + ': ', connection );
+      tthis.handleConnConns(loader, conns);
 
-    conn = new Connection(connection)
-    var t = isBefore?conn.tMax:conn.tMin;
-    conn.t = t;
+      var conns = isBefore?this.connsBefore:this.connsAfter; // conns is a hash
 
-    if (isNaN(tMin) || tMin > t) tMin = t;
-    if (isNaN(tMax) || tMax < t) tMax = t;
+      connections = json.connections;
+      console.log('[b.hcc] before', isBefore);
+      console.log('[b.hcc] connections', connections);
 
-    //if (conns[t] && conns[t].tMax-conns[t].tMin < conn.tMax-conn.tMin)
-    //  continue // keep faster connections
-    //else
-    conns.push(conn);
-  }
-  console.log('[b.hcc] tMin', tMin);
-  console.log('[b.hcc] tMax', tMax);
-  console.log('[b.hcc] conns', conns);
+      // Get dimensions
+      var tMin = NaN;
+      var tMax = NaN;
+      for ( var cid in connections ) {
+        connection = connections[cid];
+        console.log('[b.hcc]', cid + ': ', connection );
 
-  if (isBefore)
-    this.connsBefore = conns;
-  else
-    this.connsAfter = conns;
+        conn = new Connection(connection)
+        var t = isBefore?conn.tMax:conn.tMin;
+        conn.t = t;
 
-  for ( var cid in this.conns ) {
-    var conn = this.conns[cid];
-    conn.findConnConn(isBefore, conns);
-  }
+        if (isNaN(tMin) || tMin > t) tMin = t;
+        if (isNaN(tMax) || tMax < t) tMax = t;
+
+        //if (conns[t] && conns[t].tMax-conns[t].tMin < conn.tMax-conn.tMin)
+        //  continue // keep faster connections
+        //else
+        conns.push(conn);
+      }
+      console.log('[b.hcc] tMin', tMin);
+      console.log('[b.hcc] tMax', tMax);
+      console.log('[b.hcc] conns', conns);
+
+      if (isBefore)
+        this.connsBefore = conns;
+      else
+        this.connsAfter = conns;
+
+      for ( var cid in this.conns ) {
+        var conn = this.conns[cid];
+        conn.findConnConn(isBefore, conns);
+      }
 }
+
 
 TimeTableBoard.prototype.drawGrid = function() {
   var y = Math.round((this.tMin - this.tOff) * this.tScale);
@@ -346,6 +383,7 @@ function Connection(jsonConnection) {
   this.tMin = d.getTime();
   d.setISO8601( this.conn.to.arrival );
   this.tMax = d.getTime();
+  this.tLen = this.tMax - this.tMin;
 }
 
 Connection.prototype.findConnConn = function(isBefore, conns) {
