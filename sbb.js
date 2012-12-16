@@ -83,22 +83,24 @@ function cache(key, value) {
 function ConnectionLoader() {
 }
 
-ConnectionLoader.prototype.init = function(from, to, time, dataCallback, nameCallback) {
+ConnectionLoader.prototype.init = function(from, to, time, callbackObject) {
   this.from = from;
   this.to = to;
   this.conns = [];
-  this.nameCallback = nameCallback;
+  this.callbackObject = callbackObject;
   this.tStartMin = NaN;
   this.tStartMax = NaN;
   this.tEndMin = NaN;
   this.tEndMax = NaN;
 
-  this.load(time, dataCallback);
+  this.load(time);
 }
 
-ConnectionLoader.prototype.load = function(time, callback) {
-  // FIXME time should be a date object instead of string and include the date
-  var queryStr = 'from='+this.from+'&to='+this.to+'&date=2012-12-10&time='+time+'&limit=6';
+ConnectionLoader.prototype.load = function(time) {
+  var tStr = time.format('HH:MM')
+  var dStr = time.format('yyyy-mm-dd')
+
+  var queryStr = 'from='+this.from+'&to='+this.to+'&date='+dStr+'&time='+tStr+'&limit=6';
   var loader = this;
   $.ajax({
     type: 'GET',
@@ -109,7 +111,7 @@ ConnectionLoader.prototype.load = function(time, callback) {
     loader.handleData(json);
 
     //FIXME: callback only a subset of conns
-    if (callback) callback(loader.conns);
+    loader.callbackObject.callback(loader.conns);
   }).fail( function( xmlHttpRequest, statusText, errorThrown ) {
     alert(
       "Your form submission failed.\n\n"
@@ -121,11 +123,11 @@ ConnectionLoader.prototype.load = function(time, callback) {
 
 ConnectionLoader.prototype.handleData = function(json) {
   console.log('[L.hd]', json);
-  if (this.nameCallback) {
-    this.from = json.from.name;
-    this.to   = json.to.name;
-    this.nameCallback(this.from, this.to);
-    this.nameCallback = undefined;
+  this.from = json.from.name;
+  this.to   = json.to.name;
+  if (this.callbackObject.names) {
+    this.callbackObject.names(this.from, this.to);
+    this.callbackObject.names = undefined;
   }
 
   // create objects, adjust min/max
@@ -171,23 +173,39 @@ TimeTableBoard.prototype.init = function() {
 
   this.from = $('[name=from]').val();
   this.to   = $('[name=to]'  ).val();
-  this.date = $('[name=date]').val();
-  this.time = $('[name=time]').val();
+  this.time = this.parseUIDateTime( $('[name=date]'), $('[name=time]') );
 
   var board = this;
 
   this.mainLoader = new ConnectionLoader();
-  this.mainLoader.init(this.from, this.to, this.time,
-    function /* callback */ (conns) {
+  this.mainLoader.init(this.from, this.to, this.time, {
+    callback: function(conns) {
       board.handleMainConns(conns);
     },
-    function /* namecorrection */ (from, to) {
+    names: function(from, to) {
       board.from = from;
       $('[name=from]').val(from);
       board.to = to;
       $('[name=to]'  ).val(to);
     }
-  );
+  });
+}
+
+TimeTableBoard.prototype.parseUIDateTime = function(dRef, tRef) {
+  var date = new Date();
+  var s, dFmt, tFmt;
+
+  if (s = dRef.val() )
+    dFmt = date.setUIDate( s );
+  if (s = tRef.val() )
+    tFmt = date.setUITime( s );
+
+  if (dFmt)
+    dRef.val(date.format(dFmt));
+  if (tFmt)
+    tRef.val(date.format(tFmt));
+
+  return date;
 }
 
 TimeTableBoard.prototype.handleMainConns = function(conns) {
@@ -202,8 +220,8 @@ TimeTableBoard.prototype.handleMainConns = function(conns) {
   console.log('[B.hmc] tMin', this.tMin);
   console.log('[B.hmc] tMax', this.tMax);
 
-  this.getConnConns(true,  this.tMin, maxMin);
-  this.getConnConns(false, minMax, this.tMax);
+  this.getConnConnsBefore(this.mainLoader.tStartMin, this.mainLoader.tStartMax);
+  this.getConnConnsAfter(this.mainLoader.tEndMin, this.mainLoader.tEndMax);
 
   var d = new Date(this.tMin)
   d.setMinutes(Math.floor(d.getMinutes()/30)*30)
@@ -225,9 +243,9 @@ TimeTableBoard.prototype.handleMainConns = function(conns) {
   }
 }
 
-TimeTableBoard.prototype.getConnConns = function(isBefore, tMin, tMax) {
+TimeTableBoard.prototype.getConnConnsBefore = function(tMin, tMax) {
   this.connFrom = $('[name=connFrom]').val();
-  this.connTo   = $('[name=connTo]'  ).val();
+  if (!this.connFrom) return;
 
   var date1 = new Date(tMin-0);//FIXME
 
@@ -236,103 +254,115 @@ TimeTableBoard.prototype.getConnConns = function(isBefore, tMin, tMax) {
   var minSpace = 3*60000; // [ms]
 
   this.beforeLoader = new ConnectionLoader();
-  this.beforeLoader.init(this.connFrom, this.from, date1,
-    function /* callback */ (conns) {
+  this.beforeLoader.init(this.connFrom, this.from, date1, {
+    callback: function(conns) {
       console.log('[B.-1.c] connections', conns);
 
-      board.connectConnections(
-        function /* rateconn */ (mconn, bconn) {
+      board.connectConnections(board.mainLoader, board.beforeLoader, {
+        rate: function(mconn, bconn) {
           if (mconn.tMin - minSpace < bconn.tMax)
             return -1; // not useable
 
           return mconn.tMin - minSpace - bconn.tMax; // [ms] of waiting time
         },
-        function /* compareconns */ (conn1, conn2) {
+        cmp: function(conn1, conn2) {
           return (conn1.tLength - conn2.tLength);
         },
-        function /* setconn */ (mconn, bconn) {
+        set: function(mconn, bconn) {
           mconn.cBefore = bconn;
-          bconn.draw(board, cid);
-        }
-      );
+          bconn.draw(board, mconn.col);
+        },
+        get: function(mconn) {
+          return mconn.cBefore;
+        },
+      });
     },
-    function /* namecorrection */ (from, to) {
+    names: function(from, to) {
       $('[name=connFrom]').val(from);
     }
-  );
+  });
+}
+
+TimeTableBoard.prototype.getConnConnsAfter = function(tMin, tMax) {
+  this.connTo = $('[name=connTo]'  ).val();
+  if (!this.connTo) return;
+
+  var date1 = new Date(tMin-0);//FIXME
+
+  var board = this;
+
+  var minSpace = 3*60000; // [ms]
 
   this.afterLoader = new ConnectionLoader();
-  this.afterLoader.init(this.to, this.connTo, date1,
-    function /* callback */ (conns) {
-      console.log('[B.+1.c] connections', conns);
+  this.afterLoader.init(this.to, this.connTo, date1, {
+    callback: function(conns) {
+      console.log('[B.+1.c] conns', conns);
 
-      board.connectConnections(
-        function /* rateconn */ (mconn, bconn) {
+      board.connectConnections(board.mainLoader, board.afterLoader, {
+        rate: function(mconn, bconn) {
           if (mconn.tMax + minSpace > bconn.tMin)
             return -1; // not useable
 
           return bconn.tMax - (mconn.tMax + minSpace); // [ms] of waiting time
         },
-        function /* compareconns */ (conn1, conn2) {
+        cmp: function(conn1, conn2) {
           return (conn1.tLength - conn2.tLength);
         },
-        function /* setconn */ (mconn, bconn) {
+        set: function(mconn, bconn) {
           mconn.cAfter = bconn;
-          bconn.draw(board, cid);
-        }
-      );
+          bconn.draw(board, mconn.col);
+        },
+        get: function(mconn) {
+          return mconn.cAfter;
+        },
+      });
     },
-    function /* namecorrection */ (from, to) {
+    names: function(from, to) {
       $('[name=connTo]').val(to);
     }
-  );
+  });
 }
 
-TimeTableBoard.prototype.connectConnections = function(fnRateConn, fnCompareConn, fnSetConn) {
+TimeTableBoard.prototype.connectConnections = function(mainLoader, connLoader, callbackObject) {
   console.log('[B.cc]');
 
-  
+  /** callbackObject contains:
+   * rate  function(mconn, bconn) -> gap [ms]
+   * cmp   function(conn1, conn2) -> (<0)=(<) 0=(==) (>0)=(>)
+   * set   function(mconn, bconn)
+   * get   function(mconn) -> bconn
+  */
 
-      tthis.handleConnConns(loader, conns);
+  var mconns = mainLoader.conns;
+  var cconns = connLoader.conns;
+  for ( var mcid in mconns ) {
+    var mconn = mconns[mcid];
 
-      var conns = isBefore?this.connsBefore:this.connsAfter; // conns is a hash
+    var bestC = callbackObject.get(mconn);
+    var bestR = NaN;
+    if (bestC)
+      bestR = callbackObject.rate(mconn, bestC);
 
-      connections = json.connections;
-      console.log('[b.hcc] before', isBefore);
-      console.log('[b.hcc] connections', connections);
+    for ( var ccid in cconns ) {
+      var cconn = cconns[ccid];
 
-      // Get dimensions
-      var tMin = NaN;
-      var tMax = NaN;
-      for ( var cid in connections ) {
-        connection = connections[cid];
-        console.log('[b.hcc]', cid + ': ', connection );
+      r = callbackObject.rate(mconn, cconn);
+      if (r < 0) continue; // out of range
 
-        conn = new Connection(connection)
-        var t = isBefore?conn.tMax:conn.tMin;
-        conn.t = t;
+      console.log('[B.cc]', 'bestC', bestC, 'bestR', bestR, 'mconn', mconn, 'cconn', cconn, 'r', r);
 
-        if (isNaN(tMin) || tMin > t) tMin = t;
-        if (isNaN(tMax) || tMax < t) tMax = t;
-
-        //if (conns[t] && conns[t].tMax-conns[t].tMin < conn.tMax-conn.tMin)
-        //  continue // keep faster connections
-        //else
-        conns.push(conn);
+      if (isNaN(bestR) || r < bestR || (r == bestR && callbackObject.cmp(cconn, bestC)<0 )) {
+        bestR = r;
+        bestC = cconn;
+        console.log('[B.cc] -', 'bestC', bestC, 'bestR', bestR);
       }
-      console.log('[b.hcc] tMin', tMin);
-      console.log('[b.hcc] tMax', tMax);
-      console.log('[b.hcc] conns', conns);
-
-      if (isBefore)
-        this.connsBefore = conns;
-      else
-        this.connsAfter = conns;
-
-      for ( var cid in this.conns ) {
-        var conn = this.conns[cid];
-        conn.findConnConn(isBefore, conns);
-      }
+    }
+    console.log('[B.cc] =', 'bestC', bestC, 'bestR', bestR);
+    if (callbackObject.get(mconn) != bestC) {
+      callbackObject.set(mconn, bestC);
+    }
+  }
+  console.log('[B.cc] done.');
 }
 
 
@@ -421,7 +451,7 @@ Connection.prototype.findConnConn = function(isBefore, conns) {
 }
 
 Connection.prototype.draw = function(board, col) {
-  console.log( '[c.d] conn: ', this );
+  console.log( '[C.d] { ', 'col', col, 'conn', this );
 
   this.col = col;
 
@@ -476,6 +506,8 @@ Connection.prototype.draw = function(board, col) {
     this.drawTimePlace(x2, y1, my, section.departure.station.name, date1);
     this.drawTimePlace(x2, y2, my, section.arrival.station.name,   date2);
   }
+
+  console.log( '[C.d] } done.' );
 }
 
 Connection.prototype.drawPlatform = function(x1, y, my, plf) {
