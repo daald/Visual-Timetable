@@ -50,14 +50,30 @@ $(function(){
 
     board.init();
   });
-  $('input[type=button]').click(function(event) {
+  $('#swap').click(function(event) {
+    event.preventDefault();
+
     var from = $('[name=from]');
     var to   = $('[name=to]'  );
     var tmp = from.val();
     from.val(to.val());
     to.val(tmp);
 
+    var from = $('[name=connFrom]');
+    var to   = $('[name=connTo]'  );
+    var tmp = from.val();
+    from.val(to.val());
+    to.val(tmp);
+
     board.init();
+  });
+  $('#save').click(function(event) {
+    event.preventDefault();
+
+    var content = $('#timetable').html();
+    var uriContent = "data:image/svg+xml," + encodeURIComponent(content);
+    //var uriContent = "data:application/octet-stream," + encodeURIComponent(content);
+    var newWindow = window.open(uriContent, 'timetable.svg');
   });
 
   // initial display
@@ -175,6 +191,8 @@ TimeTableBoard.prototype.init = function() {
   this.to   = $('[name=to]'  ).val();
   this.time = this.parseUIDateTime( $('[name=date]'), $('[name=time]') );
 
+  this.installResizeHandler();
+
   var board = this;
 
   this.mainLoader = new ConnectionLoader();
@@ -191,6 +209,26 @@ TimeTableBoard.prototype.init = function() {
   });
 }
 
+TimeTableBoard.prototype.installResizeHandler = function() {
+  var r = this.R.rect(20, 20, 10, 10);
+  r.attr({fill: '#cc6'});
+  r.node.setAttribute('class', 'handle');
+  var board = this;
+
+  $('#timetable')
+   /*.bind('dragstart',function( event ){
+       console.log('dragstart');
+       return $(event.target).is('.handle');
+     })*/
+   .bind('drag',function( event ){
+       console.log('dragev', event.offsetY, event);
+       $( this ).css({
+         width: Math.round( event.offsetY/20 ) * 20,
+         left: Math.round( event.offsetX/20 ) * 20
+       });
+     }); 
+}
+
 TimeTableBoard.prototype.parseUIDateTime = function(dRef, tRef) {
   var date = new Date();
   var s, dFmt, tFmt;
@@ -202,8 +240,12 @@ TimeTableBoard.prototype.parseUIDateTime = function(dRef, tRef) {
 
   if (dFmt)
     dRef.val(date.format(dFmt));
+  else
+    dRef.val(date.format('yyyy-mm-dd'));
   if (tFmt)
     tRef.val(date.format(tFmt));
+  else
+    tRef.val(date.format('HH:MM'));
 
   return date;
 }

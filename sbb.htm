@@ -27,7 +27,7 @@
             </tr>
             <tr>
               <td></td>
-              <td>To:</td><td><input name="to" value="Schaffhausen" class="stationfield"/></td>
+              <td>To:</td><td><input name="to" value="Schaffhausen" class="stationfield"/> <button id="swap">&lt;-&gt;</button></td>
               <td>Time:</td><td><input name="time" value="19:00"/>
               </td>
             </tr>
@@ -35,12 +35,18 @@
               <td>Connection after:</td><td>To:</td><td><input name="connTo" value="" class="stationfield"/></td>
             </tr>
           </table>
-          <p><input type="submit" value="Update"/>
-            <input type="button" value="<->"/></p>
+          <p><input type="submit" value="Update"/></p>
         </form>
       </div>
       <div id="timetable">
           Your browser has a JavaScript problem
+      </div>
+      <div id="timetable-buttons">
+          <button>&lt;-&gt;</button>
+          <button>-&gt;&lt;-</button>
+          <button>&lt;-</button>
+          <button>-&gt;</button>
+          <button id="save">save</button>
       </div>
     </body>
 </html>
