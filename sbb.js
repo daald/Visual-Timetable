@@ -50,6 +50,7 @@ $(function(){
 
     board.init();
   });
+
   $('#swap').click(function(event) {
     event.preventDefault();
 
@@ -67,6 +68,7 @@ $(function(){
 
     board.init();
   });
+
   $('#save').click(function(event) {
     event.preventDefault();
 
@@ -74,6 +76,19 @@ $(function(){
     var uriContent = "data:image/svg+xml," + encodeURIComponent(content);
     //var uriContent = "data:application/octet-stream," + encodeURIComponent(content);
     var newWindow = window.open(uriContent, 'timetable.svg');
+  });
+
+  $('#ctlEnlarge').click(function(event) {
+    event.preventDefault();
+    board.connNum++;
+    board.setDims();
+  });
+
+  $('#ctlShrink').click(function(event) {
+    if (board.connNum <= 1) return;
+    event.preventDefault();
+    board.connNum--;
+    board.setDims();
   });
 
   // initial display
@@ -170,8 +185,13 @@ ConnectionLoader.prototype.handleData = function(json) {
  *** TimeTableBoard object
  */
 function TimeTableBoard() {
-  this.h = 480;
-  this.w = 640;
+
+  this.ox0 = 40; // X of first connection
+  this.connWidth = 100;
+  this.connSpace = 10;
+  this.connNum = 7;
+
+  this.setDims();
   $('#timetable').empty();
   this.R = Raphael('timetable', this.w, this.h);
 
@@ -180,7 +200,7 @@ function TimeTableBoard() {
 
   //var tMin, tMax;
   //var tOff, tScale;
-  //var ox1;
+  //var ox0;
 }
 
 TimeTableBoard.prototype.init = function() {
@@ -190,8 +210,6 @@ TimeTableBoard.prototype.init = function() {
   this.from = $('[name=from]').val();
   this.to   = $('[name=to]'  ).val();
   this.time = this.parseUIDateTime( $('[name=date]'), $('[name=time]') );
-
-  this.installResizeHandler();
 
   var board = this;
 
@@ -209,24 +227,11 @@ TimeTableBoard.prototype.init = function() {
   });
 }
 
-TimeTableBoard.prototype.installResizeHandler = function() {
-  var r = this.R.rect(20, 20, 10, 10);
-  r.attr({fill: '#cc6'});
-  r.node.setAttribute('class', 'handle');
-  var board = this;
+TimeTableBoard.prototype.setDims = function(dRef, tRef) {
+  this.h = 480;
+  this.w = this.ox0 + this.connWidth * this.connNum;
 
-  $('#timetable')
-   /*.bind('dragstart',function( event ){
-       console.log('dragstart');
-       return $(event.target).is('.handle');
-     })*/
-   .bind('drag',function( event ){
-       console.log('dragev', event.offsetY, event);
-       $( this ).css({
-         width: Math.round( event.offsetY/20 ) * 20,
-         left: Math.round( event.offsetX/20 ) * 20
-       });
-     }); 
+  if (this.R) this.R.setSize(this.w, this.h);
 }
 
 TimeTableBoard.prototype.parseUIDateTime = function(dRef, tRef) {
@@ -271,8 +276,6 @@ TimeTableBoard.prototype.handleMainConns = function(conns) {
   d.setMilliseconds(0)
   this.tMin = d.getTime();
   console.log('[B.hmc] tMin2', this.tMin);
-
-  this.ox1 = 40;
 
   this.tOff = this.tMin;
   this.tScale = this.h / (this.tMax-this.tMin);
@@ -373,7 +376,7 @@ TimeTableBoard.prototype.connectConnections = function(mainLoader, connLoader, c
    * cmp   function(conn1, conn2) -> (<0)=(<) 0=(==) (>0)=(>)
    * set   function(mconn, bconn)
    * get   function(mconn) -> bconn
-  */
+   */
 
   var mconns = mainLoader.conns;
   var cconns = connLoader.conns;
@@ -500,8 +503,8 @@ Connection.prototype.draw = function(board, col) {
   this.board = board;
   var R = board.R;
 
-  var x1 = board.ox1 +  parseInt(col)   *100 + 5;
-  var x2 = board.ox1 + (parseInt(col)+1)*100 - 5;
+  var x1 = board.ox0 +  parseInt(col)   *board.connWidth + board.connSpace;
+  var x2 = board.ox0 + (parseInt(col)+1)*board.connWidth - board.connSpace;
 
   sections = this.conn.sections
   for ( var sid in sections ) {
@@ -521,10 +524,9 @@ Connection.prototype.draw = function(board, col) {
     var h = y2-y1;
 
     // bounding rect
-    R.rect(x1+5, y1, x2-x1-10, y2-y1)
+    R.rect(x1, y1, x2-x1, y2-y1)
       .attr({fill: '#cc6', 'fill-opacity': .4, 'stroke-opacity': 1, 'stroke-width': .5});
     //.node.setAttribute('class', 'trsection');
-
 
     var jcat = section.journey.category;
     var jnum = section.journey.number;
@@ -559,10 +561,10 @@ Connection.prototype.drawPlatform = function(x1, y, my, plf) {
   var R = this.board.R;
 
   // we draw the rect first because of zorder
-  var r = R.rect( x1+8, y+4, 12, 12 )
+  var r = R.rect( x1+3, y+4, 2, 12 )
     .attr({fill: (y<my?'#cc0':'#ccc'), 'fill-opacity': .5});
   //r.node.setAttribute('class', 'trfrbox');
-  var t = R.text( x1+12, (y<my?y+10:y-10), plf )
+  var t = R.text( x1+7, (y<my?y+10:y-10), plf )
     .attr({'font': '9px "Arial"', fill: '#000', 'text-anchor': 'start'});
   //t.node.setAttribute('class', 'trfrtxt');
 
@@ -579,14 +581,14 @@ Connection.prototype.drawTimePlace = function(x2, y, my, station, date) {
 
   var R = this.board.R;
 
-  t = R.text( x2-8, (y<my?y+7:y-7), date.format('H:MM') )
+  t = R.text( x2-3, (y<my?y+7:y-7), date.format('H:MM') )
     .attr({"font": '11px "Arial"', fill: "#222", 'text-anchor': 'end'});
   //t.node.setAttribute('class', 'trfrtm');
 
   if (Math.abs(y-my) < 20)
     return;
 
-  t = R.text( x2-8, (y<my?y+20:y-20), station )
+  t = R.text( x2-3, (y<my?y+20:y-20), station )
     .attr({"font": '9px "Arial"', fill: "#222", 'text-anchor': 'end'});
   //t.node.setAttribute('class', 'trftst');
 }
