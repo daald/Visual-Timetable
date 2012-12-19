@@ -1,8 +1,8 @@
 
 
-
 //////////////////////////////////////// MINI LIB
-function avg(v1, v2, w=.5) {
+function avg(v1, v2, w) {
+  if (!w) w = .5;
   return (v2 - v1) * w + v1;
 }
 
