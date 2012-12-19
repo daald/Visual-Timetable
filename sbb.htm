@@ -4,10 +4,10 @@
         <meta charset="utf-8">
         <title>SBB</title>
         <script>
-if (!console) {
+if (typeof console == 'undefined') {
   console = {};
 }
-if (!console.log) {
+if (typeof console.log == 'undefined') {
   console.log = function() {}
 }
         </script>
