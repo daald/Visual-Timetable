@@ -219,7 +219,36 @@ TimeTableBoard.prototype.init = function() {
   this.mainLoader = new ConnectionLoader();
   this.mainLoader.init(this.from, this.to, this.time, {
     callback: function(conns) {
-      board.handleMainConns(conns);
+      console.log('[B.hmc]');
+
+      // Get dimensions
+      board.tMin = board.mainLoader.tStartMin;
+      board.tMax = board.mainLoader.tEndMax;
+      var maxMin = board.mainLoader.tStartMax;
+      var minMax = board.mainLoader.tEndMin;
+      board.conns = conns;
+      console.log('[B.hmc] tMin', board.tMin);
+      console.log('[B.hmc] tMax', board.tMax);
+
+      board.getConnConnsBefore(board.mainLoader.tStartMin, board.mainLoader.tStartMax);
+      board.getConnConnsAfter(board.mainLoader.tEndMin, board.mainLoader.tEndMax);
+
+      var d = new Date(board.tMin)
+      d.setMinutes(Math.floor(d.getMinutes()/30)*30)
+      d.setSeconds(0)
+      d.setMilliseconds(0)
+      board.tMin = d.getTime();
+      console.log('[B.hmc] tMin2', board.tMin);
+
+      board.tOff = board.tMin;
+      board.tScale = board.h / (board.tMax-board.tMin);
+
+      board.drawGrid()
+
+      for ( var cid in board.conns ) {
+        var conn = board.conns[cid];
+        conn.draw(board, cid);
+      }
     },
     names: function(from, to) {
       board.from = from;
@@ -256,39 +285,6 @@ TimeTableBoard.prototype.parseUIDateTime = function(dRef, tRef) {
     tRef.val(date.format('HH:MM'));
 
   return date;
-}
-
-TimeTableBoard.prototype.handleMainConns = function(conns) {
-  console.log('[B.hmc]');
-
-  // Get dimensions
-  this.tMin = this.mainLoader.tStartMin;
-  this.tMax = this.mainLoader.tEndMax;
-  var maxMin = this.mainLoader.tStartMax;
-  var minMax = this.mainLoader.tEndMin;
-  this.conns = conns;
-  console.log('[B.hmc] tMin', this.tMin);
-  console.log('[B.hmc] tMax', this.tMax);
-
-  this.getConnConnsBefore(this.mainLoader.tStartMin, this.mainLoader.tStartMax);
-  this.getConnConnsAfter(this.mainLoader.tEndMin, this.mainLoader.tEndMax);
-
-  var d = new Date(this.tMin)
-  d.setMinutes(Math.floor(d.getMinutes()/30)*30)
-  d.setSeconds(0)
-  d.setMilliseconds(0)
-  this.tMin = d.getTime();
-  console.log('[B.hmc] tMin2', this.tMin);
-
-  this.tOff = this.tMin;
-  this.tScale = this.h / (this.tMax-this.tMin);
-
-  this.drawGrid()
-
-  for ( var cid in this.conns ) {
-    var conn = this.conns[cid];
-    conn.draw(this, cid);
-  }
 }
 
 TimeTableBoard.prototype.getConnConnsBefore = function(tMin, tMax) {
