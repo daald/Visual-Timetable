@@ -82,6 +82,7 @@ $(function(){
     event.preventDefault();
     board.connNum++;
     board.setDims();
+    board.drawGrid();
   });
 
   $('#ctlShrink').click(function(event) {
@@ -201,6 +202,8 @@ function TimeTableBoard() {
   //var tMin, tMax;
   //var tOff, tScale;
   //var ox0;
+
+  this.gridSet = undefined;
 }
 
 TimeTableBoard.prototype.init = function() {
@@ -410,9 +413,15 @@ TimeTableBoard.prototype.connectConnections = function(mainLoader, connLoader, c
   console.log('[B.cc] done.');
 }
 
+/**
+ * Returns y as a function of time
+ */
+TimeTableBoard.prototype.getY = function(t) {
+  return Math.round((t - this.tOff) * this.tScale);
+}
 
 TimeTableBoard.prototype.drawGrid = function() {
-  var y = Math.round((this.tMin - this.tOff) * this.tScale);
+  var y = this.getY(this.tMin);
 
   var sI = NaN, lI = NaN;
 
@@ -420,17 +429,20 @@ TimeTableBoard.prototype.drawGrid = function() {
   var interval;
   for (i in intervals ) {
     interval = intervals[i]*60000;
-    var y2 = Math.round((this.tMin + interval - this.tOff) * this.tScale);
+    var y2 = this.getY(this.tMin + interval);
     if (y2-y >= 25 && isNaN(lI) ) lI = interval;
     if (y2-y >= 15 && isNaN(sI) ) sI = interval;
   }
 
   var d = new Date(this.tMin)
 
+  if (this.gridSet) this.gridSet.remove();
+  var set = this.R.set();
+
   // thin lines
   t = d.getTime();
   for ( ; t<this.tMax+sI; t+=sI ) {
-    var y = Math.round((t - this.tOff) * this.tScale);
+    var y = this.getY(t);
     //R.line( 50, y, ww, y );
     //R.path('M35,'+y+'L'+ww+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .5});
   }
@@ -438,11 +450,15 @@ TimeTableBoard.prototype.drawGrid = function() {
   // thick lines with labels
   t = d.getTime();
   for ( ; t<this.tMax+lI; t+=lI ) {
-    var y = Math.round((t - this.tOff) * this.tScale);
+    var y = this.getY(t);
     d = new Date(t);
-    this.R.text( 5, y, d.format('HH:MM') ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'start'});
-    this.R.path('M35,'+y+'L'+this.w+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .25});
+    set.push(
+      this.R.text( 5, y, d.format('HH:MM') ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'start'}),
+      this.R.path('M35,'+y+'L'+this.w+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .25})
+    );
   }
+
+  this.gridSet = set;
 }
 
 
@@ -459,6 +475,8 @@ function Connection(jsonConnection) {
   d.setISO8601( this.conn.to.arrival );
   this.tMax = d.getTime();
   this.tLen = this.tMax - this.tMin;
+
+  this.set = undefined;
 }
 
 Connection.prototype.findConnConn = function(isBefore, conns) {
@@ -503,6 +521,9 @@ Connection.prototype.draw = function(board, col) {
   this.board = board;
   var R = board.R;
 
+  if (this.set) this.set.remove();
+  var set = this.set = R.set();
+
   var x1 = board.ox0 +  parseInt(col)   *board.connWidth + board.connSpace;
   var x2 = board.ox0 + (parseInt(col)+1)*board.connWidth - board.connSpace;
 
@@ -517,44 +538,50 @@ Connection.prototype.draw = function(board, col) {
 
     var date1 = new Date();
     date1.setISO8601( section.departure.departure );
-    var y1 = Math.round((date1.getTime() - board.tOff) * board.tScale);
+    var y1 = board.getY(date1.getTime());
     var date2 = new Date();
     date2.setISO8601( section.arrival.arrival );
-    var y2 = Math.round((date2.getTime() - board.tOff) * board.tScale);
+    var y2 = board.getY(date2.getTime());
     var h = y2-y1;
 
     // bounding rect
-    R.rect(x1, y1, x2-x1, y2-y1)
-      .attr({fill: '#cc6', 'fill-opacity': .4, 'stroke-opacity': 1, 'stroke-width': .5});
+    set.push(
+      R.rect(x1, y1, x2-x1, y2-y1)
+        .attr({fill: '#cc6', 'fill-opacity': .4, 'stroke-opacity': 1, 'stroke-width': .5})
+    );
     //.node.setAttribute('class', 'trsection');
 
     var jcat = section.journey.category;
     var jnum = section.journey.number;
     if (jcat == 'Nbu') jcat = section.journey.name;
-    R.text( avg(x1,x2), avg(y1,y2, (Math.abs(y1-y2)>40?.4:.5)), jcat )
-      .attr({font: '14px "Arial"', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'});
+    set.push(
+      R.text( avg(x1,x2), avg(y1,y2, (Math.abs(y1-y2)>40?.4:.5)), jcat )
+        .attr({font: '14px "Arial"', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'})
+    );
     //.node.setAttribute('class', 'trcat');
     if (Math.abs(y1-y2)>50)
-      R.text( avg(x1,x2), avg(y1,y2,.4)+17, jnum )
-        .attr({font: '10px "Arial"', fill: '#CCCC66', 'text-anchor': 'middle'});
+      set.push(
+        R.text( avg(x1,x2), avg(y1,y2,.4)+17, jnum )
+          .attr({font: '10px "Arial"', fill: '#CCCC66', 'text-anchor': 'middle'})
+      );
 
     var my = avg(y1, y2);
     var plf1 = section.departure.platform;
     if (plf1)
-      this.drawPlatform(x1, y1, my, plf1);
+      this.drawPlatform(set, x1, y1, my, plf1);
     var plf2 = section.arrival.platform;
     if (plf2)
-      this.drawPlatform(x1, y2, my, plf2);
+      this.drawPlatform(set, x1, y2, my, plf2);
 
     my = avg(y1, y2);
-    this.drawTimePlace(x2, y1, my, section.departure.station.name, date1);
-    this.drawTimePlace(x2, y2, my, section.arrival.station.name,   date2);
+    this.drawTimePlace(set, x2, y1, my, section.departure.station.name, date1);
+    this.drawTimePlace(set, x2, y2, my, section.arrival.station.name,   date2);
   }
 
   console.log( '[C.d] } done.' );
 }
 
-Connection.prototype.drawPlatform = function(x1, y, my, plf) {
+Connection.prototype.drawPlatform = function(set, x1, y, my, plf) {
   if (y > my && y-my < 15)
     return;
 
@@ -571,9 +598,11 @@ Connection.prototype.drawPlatform = function(x1, y, my, plf) {
   // use getBBox for rect dims: http://raphaeljs.com/reference.html#Element.getBBox
   var bb = t.getBBox();
   r.attr({x: bb.x-3, y: bb.y, width: bb.width+6, height: bb.height+1});
+
+  set.push(r, t);
 }
 
-Connection.prototype.drawTimePlace = function(x2, y, my, station, date) {
+Connection.prototype.drawTimePlace = function(set, x2, y, my, station, date) {
   var t;
 
   if (y > my && y-my < 20)
@@ -584,6 +613,7 @@ Connection.prototype.drawTimePlace = function(x2, y, my, station, date) {
   t = R.text( x2-3, (y<my?y+7:y-7), date.format('H:MM') )
     .attr({"font": '11px "Arial"', fill: "#222", 'text-anchor': 'end'});
   //t.node.setAttribute('class', 'trfrtm');
+  set.push(t);
 
   if (Math.abs(y-my) < 20)
     return;
@@ -591,6 +621,7 @@ Connection.prototype.drawTimePlace = function(x2, y, my, station, date) {
   t = R.text( x2-3, (y<my?y+20:y-20), station )
     .attr({"font": '9px "Arial"', fill: "#222", 'text-anchor': 'end'});
   //t.node.setAttribute('class', 'trftst');
+  set.push(t);
 }
 
 /******************************************************************************/
