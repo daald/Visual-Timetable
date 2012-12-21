@@ -6,6 +6,66 @@ function avg(v1, v2, w) {
   return (v2 - v1) * w + v1;
 }
 
+// Production steps of ECMA-262, Edition 5, 15.4.4.18
+// Reference: http://es5.github.com/#x15.4.4.18
+if ( !Array.prototype.forEach ) {
+ 
+  Array.prototype.forEach = function forEach( callback, thisArg ) {
+ 
+    var T, k;
+ 
+    if ( this == null ) {
+      throw new TypeError( "this is null or not defined" );
+    }
+ 
+    // 1. Let O be the result of calling ToObject passing the |this| value as the argument.
+    var O = Object(this);
+ 
+    // 2. Let lenValue be the result of calling the Get internal method of O with the argument "length".
+    // 3. Let len be ToUint32(lenValue).
+    var len = O.length >>> 0; // Hack to convert O.length to a UInt32
+ 
+    // 4. If IsCallable(callback) is false, throw a TypeError exception.
+    // See: http://es5.github.com/#x9.11
+    if ( {}.toString.call(callback) !== "[object Function]" ) {
+      throw new TypeError( callback + " is not a function" );
+    }
+ 
+    // 5. If thisArg was supplied, let T be thisArg; else let T be undefined.
+    if ( thisArg ) {
+      T = thisArg;
+    }
+ 
+    // 6. Let k be 0
+    k = 0;
+ 
+    // 7. Repeat, while k < len
+    while( k < len ) {
+ 
+      var kValue;
+ 
+      // a. Let Pk be ToString(k).
+      //   This is implicit for LHS operands of the in operator
+      // b. Let kPresent be the result of calling the HasProperty internal method of O with argument Pk.
+      //   This step can be combined with c
+      // c. If kPresent is true, then
+      if ( Object.prototype.hasOwnProperty.call(O, k) ) {
+ 
+        // i. Let kValue be the result of calling the Get internal method of O with argument Pk.
+        kValue = O[ k ];
+ 
+        // ii. Call the Call internal method of callback with T as the this value and
+        // argument list containing kValue, k, and O.
+        callback.call( T, kValue, k, O );
+      }
+      // d. Increase k by 1.
+      k++;
+    }
+    // 8. return undefined
+  };
+}
+
+
 //////////////////////////////////////// START FUNCTION
 $(function(){
     // Autocomplete for station fields
@@ -110,6 +170,23 @@ function cache(key, value) {
 
 
 /*******************************************************************************
+ *** MinMax object
+ */
+function MinMax() {
+  this.min = NaN;
+  this.max = NaN;
+}
+
+MinMax.prototype.update = function(v) {
+  if (isNaN(this.min) || this.min > v) this.min = v;
+  if (isNaN(this.max) || this.max < v) this.max = v;
+}
+
+MinMax.prototype.toString = function() {
+  return this.min + '..' + this.max;
+}
+
+/*******************************************************************************
  *** TimeTableBoard object
  */
 function ConnectionLoader() {
@@ -120,15 +197,18 @@ ConnectionLoader.prototype.init = function(from, to, time, callbackObject) {
   this.to = to;
   this.conns = [];
   this.callbackObject = callbackObject;
-  this.tStartMin = NaN;
-  this.tStartMax = NaN;
-  this.tEndMin = NaN;
-  this.tEndMax = NaN;
+  this.tTotalStartMM = new MinMax();
+  this.tTotalEndMM   = new MinMax();
+  this.tCurStartMM = new MinMax();
+  this.tCurEndMM   = new MinMax();
 
   this.load(time);
 }
 
 ConnectionLoader.prototype.load = function(time) {
+  this.tCurStartMM = new MinMax();
+  this.tCurEndMM   = new MinMax();
+
   var tStr = time.format('HH:MM')
   var dStr = time.format('yyyy-mm-dd')
 
@@ -141,9 +221,6 @@ ConnectionLoader.prototype.load = function(time) {
     data: queryStr
   }).done( function(json) {
     loader.handleData(json);
-
-    //FIXME: callback only a subset of conns
-    loader.callbackObject.callback(loader.conns);
   }).fail( function( xmlHttpRequest, statusText, errorThrown ) {
     alert(
       "Your form submission failed.\n\n"
@@ -154,6 +231,14 @@ ConnectionLoader.prototype.load = function(time) {
 }
 
 ConnectionLoader.prototype.handleData = function(json) {
+  /** callbackObject contains:
+   * names        function(from, to) : correct station names from provider
+   * start        function()
+   * beforeSteps  function(partconns)
+   * step         function(conn, cid) -> ret -1 = backwards / ret 1 = forward
+   * afterSteps   function(partconns)
+   * end          function(rangecons)
+   */
   console.log('[L.hd]', json);
   this.from = json.from.name;
   this.to   = json.to.name;
@@ -162,23 +247,45 @@ ConnectionLoader.prototype.handleData = function(json) {
     this.callbackObject.names = undefined;
   }
 
-  // create objects, adjust min/max
-  var connections = json.connections;
-  for ( var cid in connections ) {
-    connection = json.connections[cid];
-    console.log('[L.hd]', cid + ': ', connection );
-
-    conn = new Connection(connection)
-    this.conns.push(conn);
-
-    if (isNaN(this.tStartMin) || this.tStartMin > conn.tMin) this.tStartMin = conn.tMin;
-    if (isNaN(this.tStartMax) || this.tStartMax < conn.tMin) this.tStartMax = conn.tMin;
-    if (isNaN(this.tEndMin)   || this.tEndMin   > conn.tMax) this.tEndMin   = conn.tMax;
-    if (isNaN(this.tEndMax)   || this.tEndMax   < conn.tMax) this.tEndMax   = conn.tMax;
+  if (this.callbackObject.start) {
+    this.callbackObject.start();
+    this.callbackObject.start = undefined;
   }
-  console.log('[L.hd] count',   this.conns.length);
-  console.log('[L.hd] tStart*', this.tStartMin, '..', this.tStartMax);
-  console.log('[L.hd] tEnd*',   this.tEndMin,   '..', this.tEndMax);
+
+  var part = [];
+
+  // create objects, adjust min/max
+  json.connections.forEach(function(jsonconn, cid) {
+    console.log('[L.hd]', cid + ': ', jsonconn );
+
+    var conn = new Connection(jsonconn)
+    var i = this.conns.push(conn);
+    part[i] = conn;
+
+    this.tTotalStartMM.update(conn.tMin);
+    this.tTotalEndMM.update(conn.tMax);
+    this.tCurStartMM.update(conn.tMin);
+    this.tCurEndMM.update(conn.tMax);
+  }, this);
+
+  if (this.callbackObject.beforeSteps)
+    this.callbackObject.beforeSteps(part);
+
+  if (this.callbackObject.step)
+    part.forEach(function(conn, cid) {
+      console.log('[L.hd]', cid + ': ', conn );
+      this.callbackObject.step(conn, cid);
+    }, this);
+
+  if (this.callbackObject.afterSteps)
+    this.callbackObject.afterSteps(part);
+
+  if (this.callbackObject.end)
+    this.callbackObject.end(this.conns);
+
+  console.log('[L.hd] count',    part.length, this.conns.length);
+  console.log('[L.hd] tTotal* ', this.tTotalStartMM, this.tTotalEndMM);
+  console.log('[L.hd] tCur*   ', this.tCurStartMM,   this.tCurEndMM);
 }
 
 
@@ -198,6 +305,7 @@ function TimeTableBoard() {
 
   this.connsBefore = [];
   this.connsAfter  = [];
+  this.conns       = [];
 
   //var tMin, tMax;
   //var tOff, tScale;
@@ -218,43 +326,48 @@ TimeTableBoard.prototype.init = function() {
 
   this.mainLoader = new ConnectionLoader();
   this.mainLoader.init(this.from, this.to, this.time, {
-    callback: function(conns) {
-      console.log('[B.hmc]');
-
-      // Get dimensions
-      board.tMin = board.mainLoader.tStartMin;
-      board.tMax = board.mainLoader.tEndMax;
-      var maxMin = board.mainLoader.tStartMax;
-      var minMax = board.mainLoader.tEndMin;
-      board.conns = conns;
-      console.log('[B.hmc] tMin', board.tMin);
-      console.log('[B.hmc] tMax', board.tMax);
-
-      board.getConnConnsBefore(board.mainLoader.tStartMin, board.mainLoader.tStartMax);
-      board.getConnConnsAfter(board.mainLoader.tEndMin, board.mainLoader.tEndMax);
-
-      var d = new Date(board.tMin)
-      d.setMinutes(Math.floor(d.getMinutes()/30)*30)
-      d.setSeconds(0)
-      d.setMilliseconds(0)
-      board.tMin = d.getTime();
-      console.log('[B.hmc] tMin2', board.tMin);
-
-      board.tOff = board.tMin;
-      board.tScale = board.h / (board.tMax-board.tMin);
-
-      board.drawGrid()
-
-      for ( var cid in board.conns ) {
-        var conn = board.conns[cid];
-        conn.draw(board, cid);
-      }
-    },
     names: function(from, to) {
       board.from = from;
       $('[name=from]').val(from);
       board.to = to;
       $('[name=to]'  ).val(to);
+    },
+    start: function() {
+      console.log('[B.hmcS]');
+      board.conns.forEach(function(conn) {
+        conn.undraw(board);
+      });
+      board.conns = [];
+    },
+    beforeSteps: function(conns) {
+      console.log('[B.hmcB]');
+
+      board.tMax = board.mainLoader.tCurEndMM.max;
+      board.tMin = board.mainLoader.tCurStartMM.min;
+      console.log('[B.hmcB] tMin1', board.tMin);
+      var d = new Date(board.tMin)
+      d.setMinutes(Math.floor(d.getMinutes()/30)*30)
+      d.setSeconds(0)
+      d.setMilliseconds(0)
+      board.tMin = d.getTime();
+      console.log('[B.hmcB] tMin2', board.tMin);
+
+      board.tOff = board.tMin;
+      board.tScale = board.h / (board.tMax-board.tMin);
+
+      board.drawGrid()
+    },
+    step: function(conn, cid) {
+      console.log('[B.hmcT]');
+
+      conn.draw(board, cid);
+      board.conns.push(conn);
+    },
+    end: function() {
+      console.log('[B.hmcE]');
+      board.conns.forEach(function(conn, cid) {
+        conn.draw(board, cid);
+      }, this);
     }
   });
 }
@@ -509,6 +622,14 @@ Connection.prototype.findConnConn = function(isBefore, conns) {
   }
 }
 
+Connection.prototype.undraw = function() {
+  if (this.set) {
+    this.set.remove();
+    this.set = undefined;
+  }
+}
+
+
 Connection.prototype.draw = function(board, col) {
   console.log( '[C.d] { ', 'col', col, 'conn', this );
 
@@ -517,7 +638,7 @@ Connection.prototype.draw = function(board, col) {
   this.board = board;
   var R = board.R;
 
-  if (this.set) this.set.remove();
+  this.undraw();
   var set = this.set = R.set();
 
   var x1 = board.ox0 +  parseInt(col)   *board.connWidth + board.connSpace;
