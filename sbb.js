@@ -152,6 +152,41 @@ $(function(){
     board.setDims();
   });
 
+  /***
+   * Control Panel
+   */
+  var timeout;
+  function hidepanel() {
+    $("#timetable-buttons").slideUp();
+  }
+  $("#timetable-buttons").hide();
+  $("#timetable, #timetable-buttons").hover(
+    function(){
+      // .position() uses position relative to the offset parent, 
+      var pos = $("#timetable").offset();
+      // .outerWidth() takes into account border and padding.
+      //var width = $(this).outerWidth();
+      //show the menu directly over the placeholder
+      $("#timetable-buttons").offset({
+        top: pos.top,
+        left: (pos.left+100),
+      }).slideDown();
+
+      /*$( "#timetable-buttons" ).position({
+        of: $("#timetable"),
+        "my": "top left",
+        "at": "top left",
+        offset: 4,
+        collision: "none none",
+      });*/
+      $("#timetable-buttons").slideDown();
+    },
+    function(){
+      clearTimeout(timeout);
+      timeout = setTimeout(hidepanel, 3000);
+    }   
+  );
+
   // initial display
   board.init();
 });
@@ -289,8 +324,7 @@ ConnectionLoader.prototype.handleData = function(json, secondCall) {
   console.log('[L.hd] needMore', needMore);
   if (needMore) {
     var tMinLatest = this.tCurStartMM.max;
-    var d = new Date();
-    d.setTime(tMinLatest);
+    var d = new Date(tMinLatest);
     console.log('[L.hd] tMinLatest', tMinLatest, d);
     this.load(d);
   } else {
