@@ -205,9 +205,11 @@ ConnectionLoader.prototype.init = function(from, to, time, callbackObject) {
   this.load(time);
 }
 
-ConnectionLoader.prototype.load = function(time) {
-  this.tCurStartMM = new MinMax();
-  this.tCurEndMM   = new MinMax();
+ConnectionLoader.prototype.load = function(time, secondCall) {
+  if (secondCall) {
+    this.tCurStartMM = new MinMax();
+    this.tCurEndMM   = new MinMax();
+  }
 
   var tStr = time.format('HH:MM')
   var dStr = time.format('yyyy-mm-dd')
@@ -220,7 +222,7 @@ ConnectionLoader.prototype.load = function(time) {
     dataType: 'json',
     data: queryStr
   }).done( function(json) {
-    loader.handleData(json);
+    loader.handleData(json, secondCall);
   }).fail( function( xmlHttpRequest, statusText, errorThrown ) {
     alert(
       "Your form submission failed.\n\n"
@@ -230,26 +232,28 @@ ConnectionLoader.prototype.load = function(time) {
   });
 }
 
-ConnectionLoader.prototype.handleData = function(json) {
+ConnectionLoader.prototype.handleData = function(json, secondCall) {
   /** callbackObject contains:
    * names        function(from, to) : correct station names from provider
    * start        function()
    * beforeSteps  function(partconns)
-   * step         function(conn, cid) -> ret -1 = backwards / ret 1 = forward
-   * afterSteps   function(partconns)
+   * step         function(conn, cid)
+   * afterSteps   function(partconns) -> ret -1 = backwards / ret 1 = forward
    * end          function(rangecons)
    */
   console.log('[L.hd]', json);
-  this.from = json.from.name;
-  this.to   = json.to.name;
-  if (this.callbackObject.names) {
-    this.callbackObject.names(this.from, this.to);
-    this.callbackObject.names = undefined;
-  }
+  if (!secondCall) {
+    this.from = json.from.name;
+    this.to   = json.to.name;
+    if (this.callbackObject.names) {
+      this.callbackObject.names(this.from, this.to);
+      this.callbackObject.names = undefined;
+    }
 
-  if (this.callbackObject.start) {
-    this.callbackObject.start();
-    this.callbackObject.start = undefined;
+    if (this.callbackObject.start) {
+      this.callbackObject.start();
+      this.callbackObject.start = undefined;
+    }
   }
 
   var part = [];
@@ -259,7 +263,7 @@ ConnectionLoader.prototype.handleData = function(json) {
     console.log('[L.hd]', cid + ': ', jsonconn );
 
     var conn = new Connection(jsonconn)
-    var i = this.conns.push(conn);
+    var i = this.conns.push(conn) - 1;
     part[i] = conn;
 
     this.tTotalStartMM.update(conn.tMin);
@@ -277,11 +281,22 @@ ConnectionLoader.prototype.handleData = function(json) {
       this.callbackObject.step(conn, cid);
     }, this);
 
+  var needMore = false;
   if (this.callbackObject.afterSteps)
-    this.callbackObject.afterSteps(part);
+    if (this.callbackObject.afterSteps(part))
+      needMore = true;
 
-  if (this.callbackObject.end)
-    this.callbackObject.end(this.conns);
+  console.log('[L.hd] needMore', needMore);
+  if (needMore) {
+    var tMinLatest = this.tCurStartMM.max;
+    var d = new Date();
+    d.setTime(tMinLatest);
+    console.log('[L.hd] tMinLatest', tMinLatest, d);
+    this.load(d);
+  } else {
+    if (this.callbackObject.end)
+      this.callbackObject.end(this.conns);
+  }
 
   console.log('[L.hd] count',    part.length, this.conns.length);
   console.log('[L.hd] tTotal* ', this.tTotalStartMM, this.tTotalEndMM);
@@ -362,6 +377,10 @@ TimeTableBoard.prototype.init = function() {
 
       conn.draw(board, cid);
       board.conns.push(conn);
+    },
+    afterSteps: function(conns) {
+      if (board.conns.length < board.connNum)
+        return 1;
     },
     end: function() {
       console.log('[B.hmcE]');
@@ -628,7 +647,6 @@ Connection.prototype.undraw = function() {
     this.set = undefined;
   }
 }
-
 
 Connection.prototype.draw = function(board, col) {
   console.log( '[C.d] { ', 'col', col, 'conn', this );
