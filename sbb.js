@@ -167,10 +167,14 @@ $(function(){
       // .outerWidth() takes into account border and padding.
       //var width = $(this).outerWidth();
       //show the menu directly over the placeholder
-      $("#timetable-buttons").offset({
+      $("#timetable-buttons").css({
+        "position":"absolute",
+      //}).offset({
         top: pos.top,
         left: (pos.left+100),
-      }).slideDown();
+      });
+
+      $("#timetable-buttons").stop(true, true).fadeTo('fast', 1);//.delay(10000).fadeOut('slow');
 
       /*$( "#timetable-buttons" ).position({
         of: $("#timetable"),
@@ -179,11 +183,12 @@ $(function(){
         offset: 4,
         collision: "none none",
       });*/
-      $("#timetable-buttons").slideDown();
+      //$("#timetable-buttons").slideDown();
     },
     function(){
-      clearTimeout(timeout);
-      timeout = setTimeout(hidepanel, 3000);
+      //clearTimeout(timeout);
+      //timeout = setTimeout(hidepanel, 3000);
+      $("#timetable-buttons").stop(true, true).delay(4000).fadeOut('slow');
     }   
   );
 
@@ -291,21 +296,20 @@ ConnectionLoader.prototype.handleData = function(json, secondCall) {
     }
   }
 
-  var part = [];
-
   // create objects, adjust min/max
+  var mergelist = [];
   json.connections.forEach(function(jsonconn, cid) {
-    console.log('[L.hd]', cid + ': ', jsonconn );
-
-    var conn = new Connection(jsonconn)
-    var i = this.conns.push(conn) - 1;
-    part[i] = conn;
-
+    var conn = new Connection(jsonconn);
+    mergelist.push(conn);
     this.tTotalStartMM.update(conn.tMin);
     this.tTotalEndMM.update(conn.tMax);
-    this.tCurStartMM.update(conn.tMin);
-    this.tCurEndMM.update(conn.tMax);
+    this.tCurStartMM.update(conn.tMin); // TODO move away
+    this.tCurEndMM.update(conn.tMax);   // TODO move away
   }, this);
+
+  this.conns = this.mergeNewConnections(this.conns, mergelist);
+
+  var part = this.conns;
 
   if (this.callbackObject.beforeSteps)
     this.callbackObject.beforeSteps(part);
@@ -335,6 +339,69 @@ ConnectionLoader.prototype.handleData = function(json, secondCall) {
   console.log('[L.hd] count',    part.length, this.conns.length);
   console.log('[L.hd] tTotal* ', this.tTotalStartMM, this.tTotalEndMM);
   console.log('[L.hd] tCur*   ', this.tCurStartMM,   this.tCurEndMM);
+}
+
+ConnectionLoader.prototype.mergeNewConnections = function(baselist, mergelist) {
+  // b=baselist m=mergelist
+  var outlist = [];
+
+  console.log('[L.m] merging ', baselist.length, ' old connections with ', mergelist.length, ' new connections' );
+
+  var iB = 0;
+  var iM = 0;
+  while (true) {
+    var cB, cM, tB, tM;
+    if (iB < baselist.length) {
+      cB = baselist[iB];
+      tB = cB.tMin;
+    } else {
+      cB = undefined;
+    }
+    if (iM < mergelist.length) {
+      cM = mergelist[iM];
+      tM = cM.tMin;
+    } else {
+      cM = undefined;
+    }
+
+    if ( (!cB) && (!cM) ) break; // finished.
+
+    if ( (!cM) || ((cB) && (tB < tM)) ) {
+      // base is next
+      outlist.push(cB);
+      iB++;
+    } else if ( (!cB) || ((cM) && (tM < tB)) ) {
+      // mergelist is next
+      outlist.push(cM);
+      iM++;
+    } else {
+      // both have the same time
+      /**
+       * we check all elements with the same time in this run. we primarily take
+       * mergelist and overtake some graphics-relevant information from baselist.
+       */
+      for ( ; iM < mergelist.length && (cM=mergelist[iM]).tMin == tM; iM++ ) {
+        for ( var iiB = iB; iiB < baselist.length && (cB=baselist[iiB]).tMin == tM; iiB++ ) {
+          if (cB.merged || !cM.equals(cB)) continue;
+
+          cM.mergeFrom(cB);
+          cB.merged = true;
+          outlist.push(cM);
+          break;
+        }
+      }
+      /**
+       * finally we add all baselist entries which were not used yet
+       */
+      for ( ; iB < baselist.length && (cB=baselist[iB]).tMin == tM; iB++ ) {
+        if (cB.merged) continue;
+
+        outlist.push(cB);
+      }
+    }
+  }
+  console.log('[L.m] merge result: ', outlist.length, ' total connections' );
+  return outlist;
 }
 
 
@@ -389,6 +456,7 @@ TimeTableBoard.prototype.init = function() {
       board.conns = [];
     },
     beforeSteps: function(conns) {
+      board.conns = conns;
       console.log('[B.hmcB]');
 
       board.tMax = board.mainLoader.tCurEndMM.max;
@@ -410,7 +478,6 @@ TimeTableBoard.prototype.init = function() {
       console.log('[B.hmcT]');
 
       conn.draw(board, cid);
-      board.conns.push(conn);
     },
     afterSteps: function(conns) {
       if (board.conns.length < board.connNum)
@@ -724,11 +791,11 @@ Connection.prototype.draw = function(board, col) {
     var jnum = section.journey.number;
     if (jcat == 'Nbu') jcat = section.journey.name;
     set.push(
-      R.text( avg(x1,x2), avg(y1,y2, (Math.abs(y1-y2)>40?.4:.5)), jcat )
+      R.text( avg(x1,x2), avg(y1,y2, (Math.abs(y1-y2)>70?.4:.5)), jcat )
         .attr({font: '14px "Arial"', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'})
     );
     //.node.setAttribute('class', 'trcat');
-    if (Math.abs(y1-y2)>50)
+    if (Math.abs(y1-y2)>70)
       set.push(
         R.text( avg(x1,x2), avg(y1,y2,.4)+17, jnum )
           .attr({font: '10px "Arial"', fill: '#CCCC66', 'text-anchor': 'middle'})
@@ -792,6 +859,25 @@ Connection.prototype.drawTimePlace = function(set, x2, y, my, station, date) {
   //t.node.setAttribute('class', 'trftst');
   set.push(t);
 }
+
+Connection.prototype.equals = function(b) {
+  var a = this;
+  if (a.tMin != b.tMin) return false;
+  if (a.tMax != b.tMax) return false;
+  if (a.conn.sections.length != b.conn.sections.length) return false;
+  // TODO compare contents of sections
+
+  return true;
+}
+
+/**
+ * overtake graphics-relevant information from another connection
+ */
+Connection.prototype.mergeFrom = function(b) {
+  this.set = b.set;
+  this.col = b.col;
+}
+
 
 /******************************************************************************/
 
