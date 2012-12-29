@@ -27,24 +27,27 @@ if (typeof console.log == 'undefined') {
         <form name="userInput">
           <table>
             <tr>
-              <td>Connection before:</td><td>From:</td><td><input name="connFrom" value="" class="stationfield"/></td>
+              <td>Connection before:</td><td>From:</td><td><input name="connFrom" value="" class="stationfield"/>
+                +mins: <input size="2" name="connFromGap" value="3"/></td>
             </tr>
             <tr>
               <td>Main connection:</td>
               <td>From:</td><td><input name="from" value="Zürich Hardbrücke" class="stationfield"/></td>
+              <td rowspan="2"><button id="swap">&lt;-&gt;</button></td>
               <td>Date:</td><td><input name="date" value="10.12.2012"/></td>
             </tr>
             <tr>
               <td></td>
-              <td>To:</td><td><input name="to" value="Schaffhausen" class="stationfield"/> <button id="swap">&lt;-&gt;</button></td>
+              <td>To:</td><td><input name="to" value="Schaffhausen" class="stationfield"/></td>
               <td>Time:</td><td><input name="time" value="19:00"/>
               </td>
             </tr>
             <tr>
-              <td>Connection after:</td><td>To:</td><td><input name="connTo" value="" class="stationfield"/></td>
+              <td>Connection after:</td><td>To:</td><td><input name="connTo" value="" class="stationfield"/>
+                +mins: <input size="2" name="connToGap" value="3"/></td>
             </tr>
           </table>
-          <p><input type="submit" value="Update"/></p>
+          <p><input type="submit" id="updateBtn" value="Update"/></p>
         </form>
       </div>
       <div id="timetable">
