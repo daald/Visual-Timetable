@@ -1,0 +1,8 @@
+== TODO ==
+
+ * Different ranges for tTotalMM and tCurMM
+ * Board Min/Max including connecting connections
+ * Avoid AJAX request in case data is already available (eg after moving)
+ * Use cache for ConnectionLoaders
+ * Implement move features
+

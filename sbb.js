@@ -558,7 +558,7 @@ TimeTableBoard.prototype.getConnConnsBefore = function(stationField, stationGap)
     update: function(conns) {
       console.log('[B.-1.c] connections', conns);
 
-      var foundAll = board.connectConnections(board.mainLoader, board.beforeLoader, {
+      var foundAll = board.connectConnections(board.conns, board.beforeLoader.conns, {
         rate: function(mconn, cconn) {
           if (mconn.tMin - board.connFromGap < cconn.tMax)
             return -1; // not useable
@@ -583,7 +583,7 @@ TimeTableBoard.prototype.getConnConnsBefore = function(stationField, stationGap)
       });
       if (!foundAll)
         return -1;
-      else if (board.mainLoader.tTotalStartMM.max>board.beforeLoader.tTotalStartMM.max)
+      else if (board.mainLoader.tCurStartMM.max>board.beforeLoader.tTotalStartMM.max)
         return +1;
 
       return 0;
@@ -601,7 +601,7 @@ TimeTableBoard.prototype.getConnConnsAfter = function(stationField, stationGap) 
   this.connToGap = stationGap.val()*60000; // [ms]
   if (!this.connTo) return;
 
-  var date1 = new Date(board.mainLoader.tTotalEndMM.min + board.connToGap);
+  var date1 = new Date(board.mainLoader.tCurEndMM.min + board.connToGap);
 
   this.afterLoader = new ConnectionLoader();
   this.afterLoader.init(this.to, this.connTo, date1, {
@@ -612,7 +612,7 @@ TimeTableBoard.prototype.getConnConnsAfter = function(stationField, stationGap) 
     update: function(conns) {
       console.log('[B.+1.c] connections', conns);
 
-      var foundAll = board.connectConnections(board.mainLoader, board.afterLoader, {
+      var foundAll = board.connectConnections(board.conns, board.afterLoader.conns, {
         rate: function(mconn, cconn) {
           if (mconn.tMax + board.connToGap > cconn.tMin)
             return -1; // not useable
@@ -635,7 +635,7 @@ TimeTableBoard.prototype.getConnConnsAfter = function(stationField, stationGap) 
           return mconn.cAfter;
         },
       });
-      if (!foundAll || board.mainLoader.tTotalEndMM.max>board.afterLoader.tTotalStartMM.max-board.connToGap*3)
+      if (!foundAll || board.mainLoader.tCurEndMM.max>board.afterLoader.tTotalStartMM.max-board.connToGap*3)
         return +1;
 
       return 0;
@@ -646,7 +646,7 @@ TimeTableBoard.prototype.getConnConnsAfter = function(stationField, stationGap) 
   });
 }
 
-TimeTableBoard.prototype.connectConnections = function(mainLoader, connLoader, callbackObject) {
+TimeTableBoard.prototype.connectConnections = function(mconns, cconns, callbackObject) {
   console.log('[B.cc]');
 
   var foundAll = true;
@@ -658,8 +658,9 @@ TimeTableBoard.prototype.connectConnections = function(mainLoader, connLoader, c
    * get   function(mconn) -> cconn
    */
 
-  var mconns = mainLoader.conns;
-  var cconns = connLoader.conns;
+  // mconns: main connections
+  // cconns: connecting connections
+
   for ( var mcid in mconns ) {
     var mconn = mconns[mcid];
 
@@ -866,7 +867,8 @@ Connection.prototype.draw = function(board, col) {
 
     var jcat = section.journey.category;
     var jnum = section.journey.number;
-    if (jcat == 'Nbu') jcat = section.journey.name;
+    if (jcat == 'Nbu') jcat = section.journey.name; // NiederflurBUS
+    if (jcat == 'Tro') jcat = section.journey.name; // Trolley
     set.push(
       R.text( avg(x1,x2), avg(y1,y2, (Math.abs(y1-y2)>70?.4:.5)), jcat )
         .attr({font: '14px "Arial"', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'})
@@ -880,6 +882,8 @@ Connection.prototype.draw = function(board, col) {
 
     var my = avg(y1, y2);
     var plf1 = section.departure.platform;
+    if (!plf1)
+      plf1 = jcat;
     if (plf1)
       this.drawPlatform(set, x1, y1, my, plf1);
     var plf2 = section.arrival.platform;
