@@ -272,6 +272,7 @@ ConnectionLoader.prototype.load = function(time, secondCall) {
 
   var queryStr = 'from='+this.from+'&to='+this.to+'&date='+dStr+'&time='+tStr+'&limit=6';
   var loader = this;
+  console.log('[L.l] fire ajax: ', queryStr);
   $.ajax({
     type: 'GET',
     url: 'http://transport.opendata.ch/v1/connections',
@@ -346,7 +347,7 @@ ConnectionLoader.prototype.handleData = function(json, secondCall) {
     var tNextMin = this.tTotalStartMM.min;
     if (this.tAbsoluteMinFetch < tNextMin) tNextMin = this.tAbsoluteMinFetch; // avoids fetching the same range multiple times
     // minus 75% of the average time between 5 connections
-    tNextMin -= (this.tTotalStartMM.max-this.tTotalStartMM.min) / this.conns.length * 5 * 075;
+    tNextMin -= (this.tTotalStartMM.max-this.tTotalStartMM.min) / this.conns.length * 5 * 0.75;
     var d = new Date(tNextMin);
     console.log('[L.hd] tNextMin', tNextMin, d);
     this.load(d);
@@ -506,10 +507,7 @@ TimeTableBoard.prototype.init = function() {
     },
     end: function() {
       console.log('[B.hmcE]');
-      // TODO status flags
-      var res = board.getConnConnsBefore();
-      if (!res)
-        board.getConnConnsAfter();
+      board.processNextFetchJob(true);
     }
   });
 }
@@ -542,11 +540,11 @@ TimeTableBoard.prototype.parseUIDateTime = function(dRef, tRef) {
   return date;
 }
 
-TimeTableBoard.prototype.getConnConnsBefore = function(tMin, tMax) {
+TimeTableBoard.prototype.getConnConnsBefore = function(stationField, stationGap) {
   var board = this;
 
-  board.connFrom = $('[name=connFrom]').val();
-  board.connFromGap = $('[name=connFromGap]').val();
+  board.connFrom    = stationField.val();
+  board.connFromGap = stationGap.val()*60000; // [ms]
   if (!this.connFrom) return;
 
   var date1 = new Date(board.mainLoader.tCurStartMM.min - board.connFromGap * 3);
@@ -555,7 +553,7 @@ TimeTableBoard.prototype.getConnConnsBefore = function(tMin, tMax) {
   this.beforeLoader.init(this.connFrom, this.from, date1, {
     names: function(from, to) {
       board.connFrom = from;
-      $('[name=connFrom]').val(from);
+      stationField.val(from);
     },
     update: function(conns) {
       console.log('[B.-1.c] connections', conns);
@@ -584,21 +582,23 @@ TimeTableBoard.prototype.getConnConnsBefore = function(tMin, tMax) {
         },
       });
       if (!foundAll)
-        needMore = -1;
-      else if (!needMore && board.mainLoader.tTotalStartMM.max>board.beforeLoader.tTotalStartMM.max)
-        needMore = +1;
-      return needMore;
+        return -1;
+      else if (board.mainLoader.tTotalStartMM.max>board.beforeLoader.tTotalStartMM.max)
+        return +1;
+
+      return 0;
+    },
+    end: function(conns) {
+      board.processNextFetchJob();
     },
   });
-
-  return true;
 }
 
-TimeTableBoard.prototype.getConnConnsAfter = function(tMin, tMax) {
+TimeTableBoard.prototype.getConnConnsAfter = function(stationField, stationGap) {
   var board = this;
 
-  this.connTo = $('[name=connTo]').val();
-  this.connToGap = $('[name=connToGap]').val();
+  this.connTo    = stationField.val();
+  this.connToGap = stationGap.val()*60000; // [ms]
   if (!this.connTo) return;
 
   var date1 = new Date(board.mainLoader.tTotalEndMM.min + board.connToGap);
@@ -607,7 +607,7 @@ TimeTableBoard.prototype.getConnConnsAfter = function(tMin, tMax) {
   this.afterLoader.init(this.to, this.connTo, date1, {
     names: function(from, to) {
       board.connTo = to;
-      $('[name=connTo]').val(to);
+      stationField.val(to);
     },
     update: function(conns) {
       console.log('[B.+1.c] connections', conns);
@@ -617,7 +617,7 @@ TimeTableBoard.prototype.getConnConnsAfter = function(tMin, tMax) {
           if (mconn.tMax + board.connToGap > cconn.tMin)
             return -1; // not useable
 
-          return cconn.tMin - (mconn.tMax + minSpace); // [ms] of waiting time
+          return cconn.tMin - (mconn.tMax + board.connToGap); // [ms] of waiting time
         },
         cmp: function(conn1, conn2) {
           return (conn1.tLength - conn2.tLength);
@@ -636,12 +636,14 @@ TimeTableBoard.prototype.getConnConnsAfter = function(tMin, tMax) {
         },
       });
       if (!foundAll || board.mainLoader.tTotalEndMM.max>board.afterLoader.tTotalStartMM.max-board.connToGap*3)
-        needMore = +1;
-      return needMore;
+        return +1;
+
+      return 0;
+    },
+    end: function(conns) {
+      board.processNextFetchJob();
     },
   });
-
-  return true;
 }
 
 TimeTableBoard.prototype.connectConnections = function(mainLoader, connLoader, callbackObject) {
@@ -692,6 +694,30 @@ TimeTableBoard.prototype.connectConnections = function(mainLoader, connLoader, c
   console.log('[B.cc] done. foundAll: ', foundAll);
   return foundAll;
 }
+
+TimeTableBoard.prototype.processNextFetchJob = function(reset) {
+  var board = this;
+
+  if (reset) {
+    board.fromConnsFetched = false;
+    board.toConnsFetched = false;
+  }
+
+  var field = $('[name=connFrom]');
+  if (field.val() && !board.fromConnsFetched) {
+    board.fromConnsFetched = true;
+    board.getConnConnsBefore(field, $('[name=connFromGap]'));
+    return;
+  }
+
+  var field = $('[name=connTo]');
+  if (field.val() && !board.toConnsFetched) {
+    board.toConnsFetched = true;
+    board.getConnConnsAfter(field, $('[name=connToGap]'));
+    return;
+  }
+}
+
 
 /**
  * Returns y as a function of time
