@@ -10,7 +10,7 @@ Date.prototype.setUIDate = function (dateStr) {
   var regexp = "^(([0-9]{2})?([0-9]{2})-)?([0-9]{1,2})-([0-9]{1,2})$";
   var d = dateStr.match(new RegExp(regexp));
   if (d) {
-    if (d[3]) { this.setYear( (d[2]?d[2]:'20') + d[3]); }
+    if (d[3]) { this.setYear( (d[2]?d[2]:'20')*100 + d[3]*1); }
     if (d[4]) { this.setMonth(d[4] - 1); }
     if (d[5]) { this.setDate(d[5]); }
     return 'yyyy-mm-dd';
@@ -21,7 +21,7 @@ Date.prototype.setUIDate = function (dateStr) {
   var regexp = "^([0-9]{1,2})/([0-9]{1,2})(/([0-9]{2})?([0-9]{2}))?$";
   var d = dateStr.match(new RegExp(regexp));
   if (d) {
-    if (d[4]) { this.setYear( (d[4]?d[4]:'20') + d[5]); }
+    if (d[5]) { this.setYear( (d[4]?d[4]:'20')*100 + d[5]*1); }
     if (d[1]) { this.setMonth(d[1] - 1); }
     if (d[2]) { this.setDate(d[2]); }
     return 'mm/dd/yyyy';
@@ -32,7 +32,7 @@ Date.prototype.setUIDate = function (dateStr) {
   var regexp = "^([0-9]{1,2})\\.([0-9]{1,2})(\\.([0-9]{2})?([0-9]{2}))?$";
   var d = dateStr.match(new RegExp(regexp));
   if (d) {
-    if (d[4]) { this.setYear( (d[4]?d[4]:'20') + d[5]); }
+    if (d[5]) { this.setYear( (d[4]?d[4]:'20')*100 + d[5]*1); }
     if (d[2]) { this.setMonth(d[2] - 1); }
     if (d[1]) { this.setDate(d[1]); }
     return 'dd.mm.yyyy';
