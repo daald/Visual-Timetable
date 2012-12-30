@@ -33,7 +33,6 @@ if (typeof console.log == 'undefined') {
             <tr>
               <td>Main connection:</td>
               <td>From:</td><td><input name="from" value="Zürich Hardbrücke" class="stationfield"/></td>
-              <td rowspan="2"><button id="swap">&lt;-&gt;</button></td>
               <td>Date:</td><td><input name="date" value="10.12.2012"/></td>
             </tr>
             <tr>
@@ -47,7 +46,8 @@ if (typeof console.log == 'undefined') {
                 +mins: <input size="2" name="connToGap" value="3"/></td>
             </tr>
           </table>
-          <p><input type="submit" id="updateBtn" value="Update"/></p>
+          <p><input type="submit" id="updateBtn" value="Update"/>
+            <button id="swap">Swap stations</button></p>
         </form>
       </div>
       <div id="timetable">

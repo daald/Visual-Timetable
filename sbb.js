@@ -786,40 +786,6 @@ function Connection(jsonConnection) {
   this.set = undefined;
 }
 
-Connection.prototype.findConnConn = function(isBefore, conns) {
-  console.log('[c.fcc] ', this, isBefore);
-
-  var space = 0 * 60000;//FIXME
-
-  var tMax = NaN, tMin = NaN;
-  for ( var cid in conns ) {
-    var conn = conns[cid];
-    if (isBefore) {
-      if ((isNaN(tMax) || conn.tMax > tMax) && conn.tMax <= this.tMin - space) {
-        this.cBefore = conn;
-        tMax = conn.tMax;
-      }
-    } else {
-      if ((isNaN(tMin) || conn.tMin < tMin) && conn.tMin >= this.tMax + space) {
-        this.cAfter = conn;
-        tMin = conn.tMin;
-      }
-    }
-  }
-
-  if (isBefore)
-    console.log('[c.fcc] new before', this, this.cBefore);
-  else
-    console.log('[c.fcc] new after', this, this.cAfter);
-
-  // FIXME: only a test
-  if (isBefore) {
-    if (this.cBefore) this.cBefore.draw(board, this.col);
-  } else {
-    if (this.cAfter) this.cAfter.draw(board, this.col);
-  }
-}
-
 Connection.prototype.undraw = function() {
   if (this.set) {
     this.set.remove();
@@ -845,10 +811,17 @@ Connection.prototype.draw = function(board, col) {
   for ( var sid in sections ) {
     section = sections[sid];
 
-    if (!section.journey && section.walk)
-      continue; // we don't visualize walking
+    this.drawSection(board, R, set, col, x1, x2, section);
+  }
 
-    console.log('[c.d]', sid + ': ', section, section.departure.station.name + '...' + section.arrival.station.name );
+  console.log( '[C.d] } done.' );
+}
+
+Connection.prototype.drawSection = function(board, R, set, col, x1, x2, section) {
+    if (!section.journey && section.walk)
+      return; // we don't visualize walking
+
+    console.log('[c.d]', col, ': ', section, section.departure.station.name + '...' + section.arrival.station.name );
 
     var date1 = new Date();
     date1.setISO8601( section.departure.departure );
@@ -893,9 +866,6 @@ Connection.prototype.draw = function(board, col) {
     my = avg(y1, y2);
     this.drawTimePlace(set, x2, y1, my, section.departure.station.name, date1);
     this.drawTimePlace(set, x2, y2, my, section.arrival.station.name,   date2);
-  }
-
-  console.log( '[C.d] } done.' );
 }
 
 Connection.prototype.drawPlatform = function(set, x1, y, my, plf) {
