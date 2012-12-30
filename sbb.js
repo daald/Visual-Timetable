@@ -508,9 +508,9 @@ TimeTableBoard.prototype.redraw = function() {
   board.drawGrid()
 
   board.conns.forEach(function(conn, cid) {
-    conn.draw(board, cid);
-    if (conn.cBefore) conn.cBefore.draw(board, cid);
-    if (conn.cAfter)  conn.cAfter.draw(board, cid);
+    conn.draw(board, cid, true);
+    if (conn.cBefore) conn.cBefore.draw(board, cid, false);
+    if (conn.cAfter)  conn.cAfter.draw(board, cid, false);
   }, this);
 }
 
@@ -577,7 +577,7 @@ TimeTableBoard.prototype.getConnConnsBefore = function(stationField, stationGap)
           cconn = $.extend({}, cconn); //clone(cconn);
 
           mconn.cBefore = cconn;
-          cconn.draw(board, mconn.col);
+          cconn.draw(board, mconn.col, false);
         },
         get: function(mconn) {
           return mconn.cBefore;
@@ -632,7 +632,7 @@ TimeTableBoard.prototype.getConnConnsAfter = function(stationField, stationGap) 
           cconn = $.extend({}, cconn); //clone(cconn);
 
           mconn.cAfter = cconn;
-          cconn.draw(board, mconn.col);
+          cconn.draw(board, mconn.col, false);
         },
         get: function(mconn) {
           return mconn.cAfter;
@@ -779,6 +779,27 @@ TimeTableBoard.prototype.drawGrid = function() {
  *** Connection object
  */
 
+connection_major_colors = {
+  sect_attr: {fill: '#cc6', 'fill-opacity': .6, 'stroke-opacity': 1, 'stroke-width': .5},
+  sect_name1: {font: '14px "Arial"', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'},
+  sect_name2: {font: '10px "Arial"', fill: '#CCCC66', 'text-anchor': 'middle'},
+  platf_dep_box: {fill: '#cc0', 'fill-opacity': .5},
+  platf_arr_box: {fill: '#ccc', 'fill-opacity': .5},
+  platf_txt: {'font': '9px "Arial"', fill: '#000', 'text-anchor': 'start'},
+  time_txt: {"font": '11px "Arial"', fill: "#222", 'text-anchor': 'end'},
+  station_txt: {"font": '9px "Arial"', fill: "#222", 'text-anchor': 'end'},
+};
+connection_minor_colors = {
+  sect_attr: {fill: '#eee', 'fill-opacity': .4, 'stroke-opacity': 1, 'stroke-width': .5},
+  sect_name1: {font: '14px "Arial"', 'font-weight': 'bold', fill: '#dddddd', 'text-anchor': 'middle'},
+  sect_name2: {font: '10px "Arial"', fill: '#dddddd', 'text-anchor': 'middle'},
+  platf_dep_box: {fill: '#ee0', 'fill-opacity': .5},
+  platf_arr_box: {fill: '#eee', 'fill-opacity': .5},
+  platf_txt: {'font': '9px "Arial"', fill: '#444', 'text-anchor': 'start'},
+  time_txt: {"font": '11px "Arial"', fill: "#666", 'text-anchor': 'end'},
+  station_txt: {"font": '9px "Arial"', fill: "#666", 'text-anchor': 'end'},
+};
+
 function Connection(jsonConnection) {
   this.conn = jsonConnection;
 
@@ -799,9 +820,10 @@ Connection.prototype.undraw = function() {
   }
 }
 
-Connection.prototype.draw = function(board, col) {
+Connection.prototype.draw = function(board, col, isMajor) {
   console.log( '[C.d] { ', 'col', col, 'conn', this );
 
+  this.isMajor = isMajor;
   this.col = col;
 
   this.board = board;
@@ -812,6 +834,11 @@ Connection.prototype.draw = function(board, col) {
 
   var x1 = board.offsetX0 +  parseInt(col)   *board.connWidth + board.connSpace;
   var x2 = board.offsetX0 + (parseInt(col)+1)*board.connWidth - board.connSpace;
+
+  if (isMajor)
+    this.colors = connection_major_colors;
+  else
+    this.colors = connection_minor_colors;
 
   sections = this.conn.sections
   for ( var sid in sections ) {
@@ -827,6 +854,8 @@ Connection.prototype.drawSection = function(board, R, set, col, x1, x2, section)
   if (!section.journey && section.walk)
     return; // we don't visualize walking
 
+  var colors = this.colors;
+
   console.log('[c.d]', col, ': ', section, section.departure.station.name + '...' + section.arrival.station.name );
 
   var date1 = new Date();
@@ -839,8 +868,7 @@ Connection.prototype.drawSection = function(board, R, set, col, x1, x2, section)
 
   // bounding rect
   set.push(
-    R.rect(x1, y1, x2-x1, y2-y1)
-      .attr({fill: '#cc6', 'fill-opacity': .4, 'stroke-opacity': 1, 'stroke-width': .5})
+    R.rect(x1, y1, x2-x1, y2-y1).attr(colors.sect_attr)
   );
   //.node.setAttribute('class', 'trsection');
 
@@ -848,24 +876,28 @@ Connection.prototype.drawSection = function(board, R, set, col, x1, x2, section)
   var jnum = section.journey.number;
   if (jcat == 'Nbu') jcat = section.journey.name; // NiederflurBUS
   if (jcat == 'Tro') jcat = section.journey.name; // Trolley
-  set.push(
-    R.text( avg(x1,x2), avg(y1,y2, (Math.abs(y1-y2)>70?.4:.5)), jcat )
-      .attr({font: '14px "Arial"', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'})
-  );
+  var plf1 = section.departure.platform;
+  if (!plf1) {
+    plf1 = jcat;
+    jcat = undefined;
+  }
+  var plf2 = section.arrival.platform;
+
+  if (jcat)
+    set.push(
+      R.text( avg(x1,x2), avg(y1,y2, (Math.abs(y1-y2)>70?.4:.5)), jcat )
+        .attr(colors.sect_name1)
+    );
   //.node.setAttribute('class', 'trcat');
   if (Math.abs(y1-y2)>70)
     set.push(
       R.text( avg(x1,x2), avg(y1,y2,.4)+17, jnum )
-        .attr({font: '10px "Arial"', fill: '#CCCC66', 'text-anchor': 'middle'})
+        .attr(colors.sect_name2)
     );
 
   var my = avg(y1, y2);
-  var plf1 = section.departure.platform;
-  if (!plf1)
-    plf1 = jcat;
   if (plf1)
     this.drawPlatform(set, x1, y1, my, plf1);
-  var plf2 = section.arrival.platform;
   if (plf2)
     this.drawPlatform(set, x1, y2, my, plf2);
 
@@ -882,10 +914,10 @@ Connection.prototype.drawPlatform = function(set, x1, y, my, plf) {
 
   // we draw the rect first because of zorder
   var r = R.rect( x1+3, y+4, 2, 12 )
-    .attr({fill: (y<my?'#cc0':'#ccc'), 'fill-opacity': .5});
+    .attr( (y<my?this.colors.platf_dep_box:this.colors.platf_arr_box ) );
   //r.node.setAttribute('class', 'trfrbox');
   var t = R.text( x1+7, (y<my?y+10:y-10), plf )
-    .attr({'font': '9px "Arial"', fill: '#000', 'text-anchor': 'start'});
+    .attr(this.colors.platf_txt);
   //t.node.setAttribute('class', 'trfrtxt');
 
   // use getBBox for rect dims: http://raphaeljs.com/reference.html#Element.getBBox
@@ -904,7 +936,7 @@ Connection.prototype.drawTimePlace = function(set, x2, y, my, station, date) {
   var R = this.board.R;
 
   t = R.text( x2-3, (y<my?y+7:y-7), date.format('H:MM') )
-    .attr({"font": '11px "Arial"', fill: "#222", 'text-anchor': 'end'});
+    .attr(this.colors.time_txt);
   //t.node.setAttribute('class', 'trfrtm');
   set.push(t);
 
@@ -912,7 +944,7 @@ Connection.prototype.drawTimePlace = function(set, x2, y, my, station, date) {
     return;
 
   t = R.text( x2-3, (y<my?y+20:y-20), station )
-    .attr({"font": '9px "Arial"', fill: "#222", 'text-anchor': 'end'});
+    .attr(this.colors.station_txt);
   //t.node.setAttribute('class', 'trftst');
   set.push(t);
 }
