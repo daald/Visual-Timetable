@@ -9,51 +9,38 @@ function avg(v1, v2, w) {
 // Production steps of ECMA-262, Edition 5, 15.4.4.18
 // Reference: http://es5.github.com/#x15.4.4.18
 if ( !Array.prototype.forEach ) {
- 
   Array.prototype.forEach = function forEach( callback, thisArg ) {
- 
     var T, k;
- 
     if ( this == null ) {
       throw new TypeError( "this is null or not defined" );
     }
- 
     // 1. Let O be the result of calling ToObject passing the |this| value as the argument.
     var O = Object(this);
- 
     // 2. Let lenValue be the result of calling the Get internal method of O with the argument "length".
     // 3. Let len be ToUint32(lenValue).
     var len = O.length >>> 0; // Hack to convert O.length to a UInt32
- 
     // 4. If IsCallable(callback) is false, throw a TypeError exception.
     // See: http://es5.github.com/#x9.11
     if ( {}.toString.call(callback) !== "[object Function]" ) {
       throw new TypeError( callback + " is not a function" );
     }
- 
     // 5. If thisArg was supplied, let T be thisArg; else let T be undefined.
     if ( thisArg ) {
       T = thisArg;
     }
- 
     // 6. Let k be 0
     k = 0;
- 
     // 7. Repeat, while k < len
     while( k < len ) {
- 
       var kValue;
- 
       // a. Let Pk be ToString(k).
       //   This is implicit for LHS operands of the in operator
       // b. Let kPresent be the result of calling the HasProperty internal method of O with argument Pk.
       //   This step can be combined with c
       // c. If kPresent is true, then
       if ( Object.prototype.hasOwnProperty.call(O, k) ) {
- 
         // i. Let kValue be the result of calling the Get internal method of O with argument Pk.
         kValue = O[ k ];
- 
         // ii. Call the Call internal method of callback with T as the this value and
         // argument list containing kValue, k, and O.
         callback.call( T, kValue, k, O );
@@ -68,38 +55,32 @@ if ( !Array.prototype.forEach ) {
 
 //////////////////////////////////////// START FUNCTION
 $(function(){
-    // Autocomplete for station fields
-        $( "input.stationfield" ).autocomplete({
-            source: function( request, response ) {
-                $.ajax({
-                    url: "http://transport.opendata.ch/v1/locations",
-                    dataType: "json",
-                    data: {
-                        query: request.term
-                    },
-                    success: function( data ) {
-                        response( $.map( data.stations, function( item ) {
-                            return {
-                                label: item.name,
-                                value: item.name
-                            }
-                        }));
-                    }
-                });
-            },
-            minLength: 3,
-            select: function( event, ui ) {
-                //alert( ui.item ?
-                //    "Selected: " + ui.item.label :
-                //    "Nothing selected, input was " + this.value);
-            },
-            /*open: function() {
-                $( this ).removeClass( "ui-corner-all" ).addClass( "ui-corner-top" );
-            },
-            close: function() {
-                $( this ).removeClass( "ui-corner-top" ).addClass( "ui-corner-all" );
-            }*/
-        });
+  // Autocomplete for station fields
+  $( "input.stationfield" ).autocomplete({
+    source: function( request, response ) {
+      $.ajax({
+        url: "http://transport.opendata.ch/v1/locations",
+        dataType: "json",
+        data: {
+          query: request.term
+        },
+        success: function( data ) {
+          response( $.map( data.stations, function( item ) {
+            return {
+              label: item.name,
+              value: item.name
+            }
+          }));
+        }
+      });
+    },
+    minLength: 3,
+    select: function( event, ui ) {
+      //alert( ui.item ?
+      //    "Selected: " + ui.item.label :
+      //    "Nothing selected, input was " + this.value);
+    },
+  });
 
   // other configurations
 
@@ -818,54 +799,54 @@ Connection.prototype.draw = function(board, col) {
 }
 
 Connection.prototype.drawSection = function(board, R, set, col, x1, x2, section) {
-    if (!section.journey && section.walk)
-      return; // we don't visualize walking
+  if (!section.journey && section.walk)
+    return; // we don't visualize walking
 
-    console.log('[c.d]', col, ': ', section, section.departure.station.name + '...' + section.arrival.station.name );
+  console.log('[c.d]', col, ': ', section, section.departure.station.name + '...' + section.arrival.station.name );
 
-    var date1 = new Date();
-    date1.setISO8601( section.departure.departure );
-    var y1 = board.getY(date1.getTime());
-    var date2 = new Date();
-    date2.setISO8601( section.arrival.arrival );
-    var y2 = board.getY(date2.getTime());
-    var h = y2-y1;
+  var date1 = new Date();
+  date1.setISO8601( section.departure.departure );
+  var y1 = board.getY(date1.getTime());
+  var date2 = new Date();
+  date2.setISO8601( section.arrival.arrival );
+  var y2 = board.getY(date2.getTime());
+  var h = y2-y1;
 
-    // bounding rect
+  // bounding rect
+  set.push(
+    R.rect(x1, y1, x2-x1, y2-y1)
+      .attr({fill: '#cc6', 'fill-opacity': .4, 'stroke-opacity': 1, 'stroke-width': .5})
+  );
+  //.node.setAttribute('class', 'trsection');
+
+  var jcat = section.journey.category;
+  var jnum = section.journey.number;
+  if (jcat == 'Nbu') jcat = section.journey.name; // NiederflurBUS
+  if (jcat == 'Tro') jcat = section.journey.name; // Trolley
+  set.push(
+    R.text( avg(x1,x2), avg(y1,y2, (Math.abs(y1-y2)>70?.4:.5)), jcat )
+      .attr({font: '14px "Arial"', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'})
+  );
+  //.node.setAttribute('class', 'trcat');
+  if (Math.abs(y1-y2)>70)
     set.push(
-      R.rect(x1, y1, x2-x1, y2-y1)
-        .attr({fill: '#cc6', 'fill-opacity': .4, 'stroke-opacity': 1, 'stroke-width': .5})
+      R.text( avg(x1,x2), avg(y1,y2,.4)+17, jnum )
+        .attr({font: '10px "Arial"', fill: '#CCCC66', 'text-anchor': 'middle'})
     );
-    //.node.setAttribute('class', 'trsection');
 
-    var jcat = section.journey.category;
-    var jnum = section.journey.number;
-    if (jcat == 'Nbu') jcat = section.journey.name; // NiederflurBUS
-    if (jcat == 'Tro') jcat = section.journey.name; // Trolley
-    set.push(
-      R.text( avg(x1,x2), avg(y1,y2, (Math.abs(y1-y2)>70?.4:.5)), jcat )
-        .attr({font: '14px "Arial"', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'})
-    );
-    //.node.setAttribute('class', 'trcat');
-    if (Math.abs(y1-y2)>70)
-      set.push(
-        R.text( avg(x1,x2), avg(y1,y2,.4)+17, jnum )
-          .attr({font: '10px "Arial"', fill: '#CCCC66', 'text-anchor': 'middle'})
-      );
+  var my = avg(y1, y2);
+  var plf1 = section.departure.platform;
+  if (!plf1)
+    plf1 = jcat;
+  if (plf1)
+    this.drawPlatform(set, x1, y1, my, plf1);
+  var plf2 = section.arrival.platform;
+  if (plf2)
+    this.drawPlatform(set, x1, y2, my, plf2);
 
-    var my = avg(y1, y2);
-    var plf1 = section.departure.platform;
-    if (!plf1)
-      plf1 = jcat;
-    if (plf1)
-      this.drawPlatform(set, x1, y1, my, plf1);
-    var plf2 = section.arrival.platform;
-    if (plf2)
-      this.drawPlatform(set, x1, y2, my, plf2);
-
-    my = avg(y1, y2);
-    this.drawTimePlace(set, x2, y1, my, section.departure.station.name, date1);
-    this.drawTimePlace(set, x2, y2, my, section.arrival.station.name,   date2);
+  my = avg(y1, y2);
+  this.drawTimePlace(set, x2, y1, my, section.departure.station.name, date1);
+  this.drawTimePlace(set, x2, y2, my, section.arrival.station.name,   date2);
 }
 
 Connection.prototype.drawPlatform = function(set, x1, y, my, plf) {
