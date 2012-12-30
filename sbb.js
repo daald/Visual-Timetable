@@ -119,7 +119,10 @@ $(function(){
   $('#save').click(function(event) {
     event.preventDefault();
 
-    var content = $('#timetable').html();
+    var content = '<?xml version="1.0" standalone="no"?>\n';
+    content += '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"\n';
+    content += '  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n';
+    content += $('#timetable').html();
     var uriContent = "data:image/svg+xml," + encodeURIComponent(content);
     //var uriContent = "data:application/octet-stream," + encodeURIComponent(content);
     var newWindow = window.open(uriContent, 'timetable.svg');
@@ -217,16 +220,16 @@ MinMax.prototype.toString = function() {
  *** TimeTableBoard object
  */
 function ConnectionLoader() {
+  this.conns = [];
+  this.tTotalStartMM = new MinMax();
+  this.tTotalEndMM   = new MinMax();
+  this.tAbsoluteMinFetch = undefined;
 }
 
 ConnectionLoader.prototype.init = function(from, to, time, callbackObject) {
-  this.tAbsoluteMinFetch = time;
   this.from = from;
   this.to = to;
-  this.conns = [];
   this.callbackObject = callbackObject;
-  this.tTotalStartMM = new MinMax();
-  this.tTotalEndMM   = new MinMax();
 
   this.fetchCount = 0;
 
@@ -239,7 +242,21 @@ ConnectionLoader.prototype.load = function(time, secondCall) {
     return;
   }
 
-  if (this.tAbsoluteMinFetch < time) this.tAbsoluteMinFetch = time;
+  var timeVal = time.getTime()
+  var shortCutSmaller=false, shortCutLarger=false;
+  this.conns.forEach(function(conn, cid) {
+    //if (conn.tMin < timeVal) shortCutSmaller = true;
+    if (conn.tMin > timeVal) shortCutLarger  = true;
+  });
+  if (this.tAbsoluteMinFetch <= timeVal && this.tAbsoluteMinFetch)
+    shortCutSmaller = true;
+  if (shortCutSmaller && shortCutLarger) {
+    console.log('[L.l] using cached result instead of AJAX call');
+    this.handleData({saved: true, connections: []}, secondCall);
+    return;
+  }
+
+  if ((!this.tAbsoluteMinFetch) || this.tAbsoluteMinFetch > timeVal) this.tAbsoluteMinFetch = timeVal;
 
   var tStr = time.format('HH:MM')
   var dStr = time.format('yyyy-mm-dd')
@@ -272,14 +289,18 @@ ConnectionLoader.prototype.handleData = function(json, secondCall) {
    * end          function(rangecons)
    */
   console.log('[L.hd]', json);
-  if (!secondCall) {
+  if (!secondCall && !json.saved) {
     this.from = json.from.name;
     this.to   = json.to.name;
+    var key = this.from + '/' + this.to;
+    cache(key, this);//now we know the real station names
     if (this.callbackObject.names) {
       this.callbackObject.names(this.from, this.to);
       this.callbackObject.names = undefined;
     }
+  }
 
+  if (!secondCall) {
     if (this.callbackObject.start) {
       this.callbackObject.start();
       this.callbackObject.start = undefined;
@@ -295,7 +316,7 @@ ConnectionLoader.prototype.handleData = function(json, secondCall) {
     this.tTotalEndMM.update(conn.tMax);
   }, this);
 
-  if (mergelist.length == 0) {
+  if (mergelist.length == 0 && !json.saved) {
     alert('Server returned empty answer');
     if (this.callbackObject.end)
       this.callbackObject.end(this.conns);
@@ -440,6 +461,19 @@ function TimeTableBoard() {
   this.gridSet = undefined;
 }
 
+TimeTableBoard.prototype.getLoader = function(from, to, time) {
+  var key = from + '/' + to;
+  var loader = cache(key);
+  if (!loader) {
+    console.log('[B.getLoader]', key, 'nocache');
+    loader = new ConnectionLoader();
+    cache(key, loader);
+  } else
+    console.log('[B.getLoader]', key, 'cache hit');
+
+  return loader;
+}
+
 TimeTableBoard.prototype.init = function() {
   $('#timetable').empty();
   this.R = Raphael('timetable', this.w, this.h);
@@ -447,10 +481,11 @@ TimeTableBoard.prototype.init = function() {
   this.from = $('[name=from]').val();
   this.to   = $('[name=to]'  ).val();
   this.time = this.parseUIDateTime( $('[name=date]'), $('[name=time]') );
+  this.timeVal = this.time.getTime();
 
   var board = this;
 
-  this.mainLoader = new ConnectionLoader();
+  this.mainLoader = this.getLoader(this.from, this.to);
   this.mainLoader.init(this.from, this.to, this.time, {
     names: function(from, to) {
       board.from = from;
@@ -466,7 +501,7 @@ TimeTableBoard.prototype.init = function() {
       board.conns = [];
     },
     rangeFn: function(conn, cid) {
-      return (cid < board.connNum);
+      return (conn.tMin >= board.timeVal) && (cid < board.connNum);
     },
     update: function(conns) {
       board.conns = conns;
@@ -551,7 +586,7 @@ TimeTableBoard.prototype.getConnConnsBefore = function(stationField, stationGap)
 
   var date1 = new Date(board.mainLoader.tCurStartMM.min - board.connFromGap * 3);
 
-  this.beforeLoader = new ConnectionLoader();
+  this.beforeLoader = this.getLoader(this.connFrom, this.from);
   this.beforeLoader.init(this.connFrom, this.from, date1, {
     names: function(from, to) {
       board.connFrom = from;
@@ -606,7 +641,7 @@ TimeTableBoard.prototype.getConnConnsAfter = function(stationField, stationGap) 
 
   var date1 = new Date(board.mainLoader.tCurEndMM.min + board.connToGap);
 
-  this.afterLoader = new ConnectionLoader();
+  this.afterLoader = this.getLoader(this.to, this.connTo);
   this.afterLoader.init(this.to, this.connTo, date1, {
     names: function(from, to) {
       board.connTo = to;
