@@ -417,8 +417,10 @@ ConnectionLoader.prototype.mergeNewConnections = function(baselist, mergelist) {
  *** TimeTableBoard object
  */
 function TimeTableBoard() {
+  this.offsetY = 20;
+  this.offsetX0 = 20;
 
-  this.ox0 = 40; // X of first connection
+  this.offsetX0 = 40; // X of first connection
   this.connWidth = 100;
   this.connSpace = 10;
   this.connNum = 7;
@@ -499,15 +501,9 @@ TimeTableBoard.prototype.redraw = function() {
   }, this);
 
   console.log('[B.rd] tMin', board.tMin);
-  /*var d = new Date(board.tMin)
-  d.setMinutes(Math.floor(d.getMinutes()/30)*30)
-  d.setSeconds(0)
-  d.setMilliseconds(0)
-  board.tMin = d.getTime();
-  console.log('[B.rd] tMin\'', board.tMin);*/
 
-  board.tOff = board.tMin;
-  board.tScale = board.h / (board.tMax-board.tMin);
+  board.tScale = (board.h-board.offsetY*2) / (board.tMax-board.tMin);
+  board.tOff = board.tMin - board.offsetY/board.tScale;
 
   board.drawGrid()
 
@@ -520,7 +516,7 @@ TimeTableBoard.prototype.redraw = function() {
 
 TimeTableBoard.prototype.setDims = function(dRef, tRef) {
   this.h = 480;
-  this.w = this.ox0 + this.connWidth * this.connNum;
+  this.w = this.offsetX0 + this.connWidth * this.connNum;
 
   if (this.R) this.R.setSize(this.w, this.h);
 }
@@ -749,7 +745,7 @@ TimeTableBoard.prototype.drawGrid = function() {
     if (y2-y >= 15 && isNaN(sI) ) sI = interval;
   }
 
-  var d = new Date(this.tMin)
+  var d = new Date(Math.floor(this.tMin/interval)*interval)
 
   if (this.gridSet) this.gridSet.remove();
   var set = this.R.set();
@@ -764,8 +760,10 @@ TimeTableBoard.prototype.drawGrid = function() {
 
   // thick lines with labels
   t = d.getTime();
-  for ( ; t<this.tMax+lI; t+=lI ) {
+  for ( ; ; t+=lI ) {
     var y = this.getY(t);
+    if (y > this.h) break;
+
     d = new Date(t);
     set.push(
       this.R.text( 5, y, d.format('HH:MM') ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'start'}),
@@ -812,8 +810,8 @@ Connection.prototype.draw = function(board, col) {
   this.undraw();
   var set = this.set = R.set();
 
-  var x1 = board.ox0 +  parseInt(col)   *board.connWidth + board.connSpace;
-  var x2 = board.ox0 + (parseInt(col)+1)*board.connWidth - board.connSpace;
+  var x1 = board.offsetX0 +  parseInt(col)   *board.connWidth + board.connSpace;
+  var x2 = board.offsetX0 + (parseInt(col)+1)*board.connWidth - board.connSpace;
 
   sections = this.conn.sections
   for ( var sid in sections ) {
