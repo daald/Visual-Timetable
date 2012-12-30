@@ -51,6 +51,12 @@ if ( !Array.prototype.forEach ) {
     // 8. return undefined
   };
 }
+if (typeof String.prototype.startsWith != 'function') {
+  // see below for better implementation!
+  String.prototype.startsWith = function (str){
+    return this.indexOf(str) == 0;
+  };
+}
 
 
 //////////////////////////////////////// START FUNCTION
@@ -483,6 +489,10 @@ TimeTableBoard.prototype.initFromHash = function() {
 }
 
 TimeTableBoard.prototype.updateHash = function() {
+  // Unfortunately, this function make an infinite loop on htmlpreview.github.com
+  if (window.location.href.startsWith('http://htmlpreview.github.com/'))
+    return;
+
   var fields = ['from', 'to', 'connFrom', 'connTo', 'connFromGap', 'connToGap', 'date', 'time'];
   var hash = '';
   for ( var i=0; i<fields.length; i++ ) {
@@ -493,6 +503,8 @@ TimeTableBoard.prototype.updateHash = function() {
     hash += fields[i] + '=' + v;
   }
   window.location.hash = hash;
+
+  $(document).attr('title', 'SBB ' + this.from + ' -> ' + this.to );
 }
 
 TimeTableBoard.prototype.getLoader = function(from, to, time) {
