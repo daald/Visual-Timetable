@@ -227,8 +227,6 @@ ConnectionLoader.prototype.init = function(from, to, time, callbackObject) {
   this.callbackObject = callbackObject;
   this.tTotalStartMM = new MinMax();
   this.tTotalEndMM   = new MinMax();
-  this.tCurStartMM = new MinMax();
-  this.tCurEndMM   = new MinMax();
 
   this.fetchCount = 0;
 
@@ -242,11 +240,6 @@ ConnectionLoader.prototype.load = function(time, secondCall) {
   }
 
   if (this.tAbsoluteMinFetch < time) this.tAbsoluteMinFetch = time;
-
-  if (secondCall) {
-    this.tCurStartMM = new MinMax();
-    this.tCurEndMM   = new MinMax();
-  }
 
   var tStr = time.format('HH:MM')
   var dStr = time.format('yyyy-mm-dd')
@@ -274,6 +267,7 @@ ConnectionLoader.prototype.handleData = function(json, secondCall) {
   /** callbackObject contains:
    * names        function(from, to) : correct station names from provider
    * start        function()
+   * rangeFn      function(conn, cid) -> true=include to result list
    * update       function(rangecons) -> ret -1 = backwards / ret 1 = forward
    * end          function(rangecons)
    */
@@ -299,8 +293,6 @@ ConnectionLoader.prototype.handleData = function(json, secondCall) {
     mergelist.push(conn);
     this.tTotalStartMM.update(conn.tMin);
     this.tTotalEndMM.update(conn.tMax);
-    this.tCurStartMM.update(conn.tMin); // TODO move away
-    this.tCurEndMM.update(conn.tMax);   // TODO move away
   }, this);
 
   if (mergelist.length == 0) {
@@ -312,11 +304,26 @@ ConnectionLoader.prototype.handleData = function(json, secondCall) {
 
   this.conns = this.mergeNewConnections(this.conns, mergelist);
 
-  var part = this.conns;
+  if (this.callbackObject.rangeFn) {
+    var range = [];
+    this.tCurStartMM = new MinMax();
+    this.tCurEndMM   = new MinMax();
+    this.conns.forEach(function(conn, cid) {
+      if (this.callbackObject.rangeFn(conn, range.length)) {
+        range.push(conn);
+        this.tCurStartMM.update(conn.tMin);
+        this.tCurEndMM.update(conn.tMax);
+      }
+    }, this);
+  } else {
+    var range = this.conns;
+    this.tCurStartMM = this.tTotalStartMM;
+    this.tCurEndMM   = this.tTotalEndMM;
+  }
 
   var needMore = 0;
   if (this.callbackObject.update)
-    needMore = this.callbackObject.update(part);
+    needMore = this.callbackObject.update(range);
 
   console.log('[L.hd] needMore', needMore);
   if (needMore == 1) {
@@ -334,10 +341,10 @@ ConnectionLoader.prototype.handleData = function(json, secondCall) {
     this.load(d);
   } else {
     if (this.callbackObject.end)
-      this.callbackObject.end(this.conns);
+      this.callbackObject.end(range);
   }
 
-  console.log('[L.hd] count',    part.length, this.conns.length);
+  console.log('[L.hd] count',    range.length, 'of', this.conns.length);
   console.log('[L.hd] tTotal* ', this.tTotalStartMM, this.tTotalEndMM);
   console.log('[L.hd] tCur*   ', this.tCurStartMM,   this.tCurEndMM);
 }
@@ -456,28 +463,12 @@ TimeTableBoard.prototype.init = function() {
       });
       board.conns = [];
     },
+    rangeFn: function(conn, cid) {
+      return (cid < board.connNum);
+    },
     update: function(conns) {
       board.conns = conns;
-      console.log('[B.hmcB]');
-
-      board.tMax = board.mainLoader.tCurEndMM.max;
-      board.tMin = board.mainLoader.tCurStartMM.min;
-      console.log('[B.hmcB] tMin1', board.tMin);
-      var d = new Date(board.tMin)
-      d.setMinutes(Math.floor(d.getMinutes()/30)*30)
-      d.setSeconds(0)
-      d.setMilliseconds(0)
-      board.tMin = d.getTime();
-      console.log('[B.hmcB] tMin2', board.tMin);
-
-      board.tOff = board.tMin;
-      board.tScale = board.h / (board.tMax-board.tMin);
-
-      board.drawGrid()
-
-      board.conns.forEach(function(conn, cid) {
-        conn.draw(board, cid);
-      }, this);
+      board.redraw();
 
       if (board.conns.length < board.connNum)
         return 1;
@@ -491,6 +482,40 @@ TimeTableBoard.prototype.init = function() {
       board.processNextFetchJob(true);
     }
   });
+}
+
+TimeTableBoard.prototype.redraw = function() {
+  var board = this;
+  console.log('[B.rd]');
+
+  board.tMax = board.mainLoader.tCurEndMM.max;
+  board.tMin = board.mainLoader.tCurStartMM.min;
+
+  board.conns.forEach(function(conn, cid) {
+    if (conn.cBefore && board.tMin > conn.cBefore.tMin)
+      board.tMin = conn.cBefore.tMin;
+    if (conn.cAfter && board.tMax < conn.cAfter.tMax)
+      board.tMax = conn.cAfter.tMax;
+  }, this);
+
+  console.log('[B.rd] tMin', board.tMin);
+  /*var d = new Date(board.tMin)
+  d.setMinutes(Math.floor(d.getMinutes()/30)*30)
+  d.setSeconds(0)
+  d.setMilliseconds(0)
+  board.tMin = d.getTime();
+  console.log('[B.rd] tMin\'', board.tMin);*/
+
+  board.tOff = board.tMin;
+  board.tScale = board.h / (board.tMax-board.tMin);
+
+  board.drawGrid()
+
+  board.conns.forEach(function(conn, cid) {
+    conn.draw(board, cid);
+    if (conn.cBefore) conn.cBefore.draw(board, cid);
+    if (conn.cAfter)  conn.cAfter.draw(board, cid);
+  }, this);
 }
 
 TimeTableBoard.prototype.setDims = function(dRef, tRef) {
@@ -570,6 +595,7 @@ TimeTableBoard.prototype.getConnConnsBefore = function(stationField, stationGap)
       return 0;
     },
     end: function(conns) {
+      board.redraw();
       board.processNextFetchJob();
     },
   });
@@ -622,6 +648,7 @@ TimeTableBoard.prototype.getConnConnsAfter = function(stationField, stationGap) 
       return 0;
     },
     end: function(conns) {
+      board.redraw();
       board.processNextFetchJob();
     },
   });
