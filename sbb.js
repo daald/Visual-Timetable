@@ -138,6 +138,7 @@ $(function(){
   $('#ctlEnlarge').click(function(event) {
     event.preventDefault();
     board.connNum++;
+    $('[name=numConns]').val(board.connNum);
     board.redraw();
   });
 
@@ -145,6 +146,7 @@ $(function(){
     if (board.connNum <= 1) return;
     event.preventDefault();
     board.connNum--;
+    $('[name=numConns]').val(board.connNum);
     board.redraw();
   });
 
@@ -451,7 +453,7 @@ function TimeTableBoard() {
   this.offsetX0 = 40; // X of first connection
   this.connWidth = 100;
   this.connSpace = 10;
-  this.connNum = 7;
+  this.connNum = 6;
 
   $('#timetable').empty();
   this.R = Raphael('timetable', this.w, this.h);
@@ -479,13 +481,17 @@ TimeTableBoard.prototype.initFromHash = function() {
 
   console.log('saved state:', form_data);
 
-  var fields = ['from', 'to', 'connFrom', 'connTo', 'connFromGap', 'connToGap', 'date', 'time'];
+  var fields = ['from', 'to', 'date', 'time', 'connFrom', 'connFromGap', 'connTo', 'connToGap', 'numConns'];
 
   for ( var i=0; i<fields.length; i++ ) {
     var f = $('[name='+fields[i]+']');
     if (form_data[fields[i]])
       f.val(form_data[fields[i]]);
   }
+
+  var v = $('[name=numConns]').val();
+  if (v >= 1)
+    this.connNum = v;
 }
 
 TimeTableBoard.prototype.updateHash = function() {
@@ -493,7 +499,7 @@ TimeTableBoard.prototype.updateHash = function() {
   if (window.location.href.startsWith('http://htmlpreview.github.com/'))
     return;
 
-  var fields = ['from', 'to', 'connFrom', 'connTo', 'connFromGap', 'connToGap', 'date', 'time'];
+  var fields = ['from', 'to', 'date', 'time', 'connFrom', 'connFromGap', 'connTo', 'connToGap', 'numConns'];
   var hash = '';
   for ( var i=0; i<fields.length; i++ ) {
     var v = $('[name='+fields[i]+']').val();
