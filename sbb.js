@@ -131,15 +131,24 @@ $(function(){
   $('#ctlEnlarge').click(function(event) {
     event.preventDefault();
     board.connNum++;
-    board.setDims();
-    board.drawGrid();
+    board.redraw();
   });
 
   $('#ctlShrink').click(function(event) {
     if (board.connNum <= 1) return;
     event.preventDefault();
     board.connNum--;
-    board.setDims();
+    board.redraw();
+  });
+
+  $('#ctlShiftLeft').click(function(event) {
+    event.preventDefault();
+    board.navigate(-1);
+  });
+
+  $('#ctlShiftRight').click(function(event) {
+    event.preventDefault();
+    board.navigate(+1);
   });
 
   /***
@@ -446,7 +455,6 @@ function TimeTableBoard() {
   this.connSpace = 10;
   this.connNum = 7;
 
-  this.setDims();
   $('#timetable').empty();
   this.R = Raphael('timetable', this.w, this.h);
 
@@ -523,12 +531,24 @@ TimeTableBoard.prototype.init = function() {
 
 TimeTableBoard.prototype.redraw = function() {
   var board = this;
+
+  this.h = 480;
+  this.w = this.offsetX0 + this.connWidth * this.connNum;
+
+  if (!board.mainLoader) return;
+
+  if (this.R) this.R.setSize(this.w, this.h);
+
   console.log('[B.rd]');
 
-  board.tMax = board.mainLoader.tCurEndMM.max;
-  board.tMin = board.mainLoader.tCurStartMM.min;
-
+  board.tMax = NaN;
+  board.tMin = NaN;
   board.conns.forEach(function(conn, cid) {
+    if (isNaN(board.tMin) || board.tMin > conn.tMin)
+      board.tMin = conn.tMin;
+    if (isNaN(board.tMax) || board.tMax < conn.tMax)
+      board.tMax = conn.tMax;
+
     if (conn.cBefore && board.tMin > conn.cBefore.tMin)
       board.tMin = conn.cBefore.tMin;
     if (conn.cAfter && board.tMax < conn.cAfter.tMax)
@@ -549,11 +569,29 @@ TimeTableBoard.prototype.redraw = function() {
   }, this);
 }
 
-TimeTableBoard.prototype.setDims = function(dRef, tRef) {
-  this.h = 480;
-  this.w = this.offsetX0 + this.connWidth * this.connNum;
+TimeTableBoard.prototype.navigate = function(leftright) {
+  var board = this;
+  var nextLeft = NaN;
+  var nextRight = NaN;
 
-  if (this.R) this.R.setSize(this.w, this.h);
+  board.mainLoader.conns.forEach(function(conn, cid) {
+    if (conn.tMin < board.timeVal) nextLeft = conn.tMin;
+    if (conn.tMin > board.timeVal && isNaN(nextRight)) nextRight = conn.tMin;
+  }, this);
+
+  var next;
+  if (leftright == -1 && !isNaN(nextLeft))
+    next = nextLeft;
+  if (leftright == +1 && !isNaN(nextRight))
+    next = nextRight;
+
+  if (!next) return;
+
+  var date = new Date(next);
+  $('[name=date]').val(date.format('yyyy-mm-dd'));
+  $('[name=time]').val(date.format('HH:MM'));
+
+  this.init();
 }
 
 TimeTableBoard.prototype.parseUIDateTime = function(dRef, tRef) {
@@ -801,7 +839,7 @@ TimeTableBoard.prototype.drawGrid = function() {
 
     d = new Date(t);
     set.push(
-      this.R.text( 5, y, d.format('HH:MM') ).attr({"font": '9px "Arial"', fill: "#333", 'text-anchor': 'start'}),
+      this.R.text( 5, y, d.format('HH:MM') ).attr({"font": '9px Arial, Helvetica, sans-serif', fill: "#333", 'text-anchor': 'start'}),
       this.R.path('M35,'+y+'L'+this.w+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .25})
     );
   }
@@ -816,23 +854,23 @@ TimeTableBoard.prototype.drawGrid = function() {
 
 connection_major_colors = {
   sect_attr: {fill: '#cc6', 'fill-opacity': .6, 'stroke-opacity': 1, 'stroke-width': .5},
-  sect_name1: {font: '14px "Arial"', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'},
-  sect_name2: {font: '10px "Arial"', fill: '#CCCC66', 'text-anchor': 'middle'},
+  sect_name1: {font: '14px Arial, Helvetica, sans-serif', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'},
+  sect_name2: {font: '10px Arial, Helvetica, sans-serif', fill: '#CCCC66', 'text-anchor': 'middle'},
   platf_dep_box: {fill: '#cc0', 'fill-opacity': .5},
   platf_arr_box: {fill: '#ccc', 'fill-opacity': .5},
-  platf_txt: {'font': '9px "Arial"', fill: '#000', 'text-anchor': 'start'},
-  time_txt: {"font": '11px "Arial"', fill: "#222", 'text-anchor': 'end'},
-  station_txt: {"font": '9px "Arial"', fill: "#222", 'text-anchor': 'end'},
+  platf_txt: {'font': '9px Arial, Helvetica, sans-serif', fill: '#000', 'text-anchor': 'start'},
+  time_txt: {"font": '11px Arial, Helvetica, sans-serif', fill: "#222", 'text-anchor': 'end'},
+  station_txt: {"font": '9px Arial, Helvetica, sans-serif', fill: "#222", 'text-anchor': 'end'},
 };
 connection_minor_colors = {
   sect_attr: {fill: '#eee', 'fill-opacity': .4, 'stroke-opacity': 1, 'stroke-width': .5},
-  sect_name1: {font: '14px "Arial"', 'font-weight': 'bold', fill: '#dddddd', 'text-anchor': 'middle'},
-  sect_name2: {font: '10px "Arial"', fill: '#dddddd', 'text-anchor': 'middle'},
+  sect_name1: {font: '14px Arial, Helvetica, sans-serif', 'font-weight': 'bold', fill: '#dddddd', 'text-anchor': 'middle'},
+  sect_name2: {font: '10px Arial, Helvetica, sans-serif', fill: '#dddddd', 'text-anchor': 'middle'},
   platf_dep_box: {fill: '#ee0', 'fill-opacity': .5},
   platf_arr_box: {fill: '#eee', 'fill-opacity': .5},
-  platf_txt: {'font': '9px "Arial"', fill: '#444', 'text-anchor': 'start'},
-  time_txt: {"font": '11px "Arial"', fill: "#666", 'text-anchor': 'end'},
-  station_txt: {"font": '9px "Arial"', fill: "#666", 'text-anchor': 'end'},
+  platf_txt: {'font': '9px Arial, Helvetica, sans-serif', fill: '#444', 'text-anchor': 'start'},
+  time_txt: {"font": '11px Arial, Helvetica, sans-serif', fill: "#666", 'text-anchor': 'end'},
+  station_txt: {"font": '9px Arial, Helvetica, sans-serif', fill: "#666", 'text-anchor': 'end'},
 };
 
 function Connection(jsonConnection) {
