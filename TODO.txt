@@ -8,4 +8,5 @@
  * icons for control panel and german translation
  * different colors for connection connections (ok)
  * avoid gaps in connectionloader cache
+ * save form state
 

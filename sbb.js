@@ -85,11 +85,12 @@ $(function(){
   // other configurations
 
   var board = new TimeTableBoard();
-  //$('#userInput').submit(function() {
+  board.initFromHash();
+
   $('#updateBtn').click(function(event) {
     event.preventDefault();
 
-    board.init();
+    board.refresh();
   });
 
   $('#swap').click(function(event) {
@@ -113,7 +114,7 @@ $(function(){
     from.val(to.val());
     to.val(tmp);
 
-    board.init();
+    board.refresh();
   });
 
   $('#save').click(function(event) {
@@ -174,15 +175,6 @@ $(function(){
       });
 
       $("#timetable-buttons").stop(true, true).fadeTo('fast', 1);//.delay(10000).fadeOut('slow');
-
-      /*$( "#timetable-buttons" ).position({
-        of: $("#timetable"),
-        "my": "top left",
-        "at": "top left",
-        offset: 4,
-        collision: "none none",
-      });*/
-      //$("#timetable-buttons").slideDown();
     },
     function(){
       //clearTimeout(timeout);
@@ -192,7 +184,7 @@ $(function(){
   );
 
   // initial display
-  board.init();
+  board.refresh();
 });
 
 
@@ -226,7 +218,7 @@ MinMax.prototype.toString = function() {
 }
 
 /*******************************************************************************
- *** TimeTableBoard object
+ *** ConnectionLoader object
  */
 function ConnectionLoader() {
   this.conns = [];
@@ -235,7 +227,7 @@ function ConnectionLoader() {
   this.tAbsoluteMinFetch = undefined;
 }
 
-ConnectionLoader.prototype.init = function(from, to, time, callbackObject) {
+ConnectionLoader.prototype.update = function(from, to, time, callbackObject) {
   this.from = from;
   this.to = to;
   this.callbackObject = callbackObject;
@@ -469,6 +461,40 @@ function TimeTableBoard() {
   this.gridSet = undefined;
 }
 
+TimeTableBoard.prototype.initFromHash = function() {
+  //from: http://stackoverflow.com/questions/3234125/creating-array-from-window-location-hash
+  var hash = window.location.hash.slice(1);
+  var array = hash.split("&");
+  var values, form_data = {};
+  for (var i = 0; i < array.length; i += 1) {
+    values = array[i].split("=");
+    form_data[values[0]] = values[1];
+  }
+
+  console.log('saved state:', form_data);
+
+  var fields = ['from', 'to', 'connFrom', 'connTo', 'connFromGap', 'connToGap', 'date', 'time'];
+
+  for ( var i=0; i<fields.length; i++ ) {
+    var f = $('[name='+fields[i]+']');
+    if (form_data[fields[i]])
+      f.val(form_data[fields[i]]);
+  }
+}
+
+TimeTableBoard.prototype.updateHash = function() {
+  var fields = ['from', 'to', 'connFrom', 'connTo', 'connFromGap', 'connToGap', 'date', 'time'];
+  var hash = '';
+  for ( var i=0; i<fields.length; i++ ) {
+    var v = $('[name='+fields[i]+']').val();
+    if (!v) continue;
+
+    if (hash == '') hash = '#'; else hash += '&';
+    hash += fields[i] + '=' + v;
+  }
+  window.location.hash = hash;
+}
+
 TimeTableBoard.prototype.getLoader = function(from, to, time) {
   var key = from + '/' + to;
   var loader = cache(key);
@@ -482,7 +508,9 @@ TimeTableBoard.prototype.getLoader = function(from, to, time) {
   return loader;
 }
 
-TimeTableBoard.prototype.init = function() {
+TimeTableBoard.prototype.refresh = function() {
+  var board = this;
+
   $('#timetable').empty();
   this.R = Raphael('timetable', this.w, this.h);
 
@@ -491,15 +519,16 @@ TimeTableBoard.prototype.init = function() {
   this.time = this.parseUIDateTime( $('[name=date]'), $('[name=time]') );
   this.timeVal = this.time.getTime();
 
-  var board = this;
+  board.updateHash();
 
   this.mainLoader = this.getLoader(this.from, this.to);
-  this.mainLoader.init(this.from, this.to, this.time, {
+  this.mainLoader.update(this.from, this.to, this.time, {
     names: function(from, to) {
       board.from = from;
       $('[name=from]').val(from);
       board.to = to;
       $('[name=to]'  ).val(to);
+      board.updateHash();
     },
     start: function() {
       console.log('[B.hmcS]');
@@ -591,7 +620,7 @@ TimeTableBoard.prototype.navigate = function(leftright) {
   $('[name=date]').val(date.format('yyyy-mm-dd'));
   $('[name=time]').val(date.format('HH:MM'));
 
-  this.init();
+  this.refresh();
 }
 
 TimeTableBoard.prototype.parseUIDateTime = function(dRef, tRef) {
@@ -625,10 +654,11 @@ TimeTableBoard.prototype.getConnConnsBefore = function(stationField, stationGap)
   var date1 = new Date(board.mainLoader.tCurStartMM.min - board.connFromGap * 3);
 
   this.beforeLoader = this.getLoader(this.connFrom, this.from);
-  this.beforeLoader.init(this.connFrom, this.from, date1, {
+  this.beforeLoader.update(this.connFrom, this.from, date1, {
     names: function(from, to) {
       board.connFrom = from;
       stationField.val(from);
+      board.updateHash();
     },
     update: function(conns) {
       console.log('[B.-1.c] connections', conns);
@@ -680,10 +710,11 @@ TimeTableBoard.prototype.getConnConnsAfter = function(stationField, stationGap) 
   var date1 = new Date(board.mainLoader.tCurEndMM.min + board.connToGap);
 
   this.afterLoader = this.getLoader(this.to, this.connTo);
-  this.afterLoader.init(this.to, this.connTo, date1, {
+  this.afterLoader.update(this.to, this.connTo, date1, {
     names: function(from, to) {
       board.connTo = to;
       stationField.val(to);
+      board.updateHash();
     },
     update: function(conns) {
       console.log('[B.+1.c] connections', conns);
