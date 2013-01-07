@@ -12,6 +12,15 @@ body {
 	stroke-width: .25
 }
 
+.copyright {
+	padding-top: 5em;
+	font-size: .8em;
+	color: grey;
+}
+.copyright a {
+	color: grey;
+}
+
 /*
 .trfrbox {	fill: #cccc00; fill-opacity: .5	}
 .trfrtxt {	font: 9px "Arial"; fill: #333; text-anchor: start	}

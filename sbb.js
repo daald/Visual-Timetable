@@ -1,4 +1,21 @@
-
+/**
+ * Copyright 2013 Daniel Alder, Switzerland
+ * https://github.com/daald/Visual-Timetable
+ *
+ * This file is part of Visual Timetable.
+ *
+ * Visual Timetable is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Foobar is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * Visual Timetable. If not, see http://www.gnu.org/licenses/.
+ **/
 
 //////////////////////////////////////// MINI LIB
 function avg(v1, v2, w) {
@@ -91,7 +108,6 @@ $(function(){
   // other configurations
 
   var board = new TimeTableBoard();
-  board.initFromHash();
 
   $('#updateBtn').click(function(event) {
     event.preventDefault();
@@ -139,6 +155,7 @@ $(function(){
     event.preventDefault();
     board.connNum++;
     $('[name=numConns]').val(board.connNum);
+    board.updateHash();
     board.redraw();
   });
 
@@ -147,6 +164,7 @@ $(function(){
     event.preventDefault();
     board.connNum--;
     $('[name=numConns]').val(board.connNum);
+    board.updateHash();
     board.redraw();
   });
 
@@ -190,6 +208,9 @@ $(function(){
       $("#timetable-buttons").stop(true, true).delay(4000).fadeOut('slow');
     }   
   );
+
+  // initial parameters
+  board.initFromHash();
 
   // initial display
   board.refresh();
@@ -483,10 +504,20 @@ TimeTableBoard.prototype.initFromHash = function() {
 
   var fields = ['from', 'to', 'date', 'time', 'connFrom', 'connFromGap', 'connTo', 'connToGap', 'numConns'];
 
+  initialized = false;
   for ( var i=0; i<fields.length; i++ ) {
     var f = $('[name='+fields[i]+']');
     if (form_data[fields[i]])
       f.val(form_data[fields[i]]);
+
+    if (f.val() && fields[i] != 'numConns')
+      initialized = true;
+  }
+
+  if (!initialized) {
+    $('[name=from]').val('Zürich Altstetten');
+    $('[name=to]').val('Uster');
+    $('[name=connTo]').val('Uster, Weidli');
   }
 
   var v = $('[name=numConns]').val();
@@ -888,8 +919,8 @@ TimeTableBoard.prototype.drawGrid = function() {
 
     d = new Date(t);
     set.push(
-      this.R.text( 5, y, d.format('HH:MM') ).attr({"font": '9px Arial, Helvetica, sans-serif', fill: "#333", 'text-anchor': 'start'}),
-      this.R.path('M35,'+y+'L'+this.w+','+y+'').attr({'stroke-opacity': .5, 'stroke-width': .25})
+      this.R.text( 5, y, d.format('HH:MM') ).attr(scale_txt),
+      this.R.path('M35,'+y+'L'+this.w+','+y+'').attr(scale_line)
     );
   }
 
@@ -901,26 +932,29 @@ TimeTableBoard.prototype.drawGrid = function() {
  *** Connection object
  */
 
+connection_svg_fontdef = 'Arial, Helvetica, sans-serif';
 connection_major_colors = {
   sect_attr: {fill: '#cc6', 'fill-opacity': .6, 'stroke-opacity': 1, 'stroke-width': .5},
-  sect_name1: {font: '14px Arial, Helvetica, sans-serif', 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'},
-  sect_name2: {font: '10px Arial, Helvetica, sans-serif', fill: '#CCCC66', 'text-anchor': 'middle'},
+  sect_name1: {'font-size': '14px', 'font-family': connection_svg_fontdef, 'font-weight': 'bold', fill: '#CCCC66', 'text-anchor': 'middle'},
+  sect_name2: {'font-size': '10px', 'font-family': connection_svg_fontdef, fill: '#CCCC66', 'text-anchor': 'middle'},
   platf_dep_box: {fill: '#cc0', 'fill-opacity': .5},
   platf_arr_box: {fill: '#ccc', 'fill-opacity': .5},
-  platf_txt: {'font': '9px Arial, Helvetica, sans-serif', fill: '#000', 'text-anchor': 'start'},
-  time_txt: {"font": '11px Arial, Helvetica, sans-serif', fill: "#222", 'text-anchor': 'end'},
-  station_txt: {"font": '9px Arial, Helvetica, sans-serif', fill: "#222", 'text-anchor': 'end'},
+  platf_txt: {'font-size': '9px', 'font-family': connection_svg_fontdef, fill: '#000', 'text-anchor': 'start'},
+  time_txt: {'font-size': '11px', 'font-family': connection_svg_fontdef, fill: "#222", 'text-anchor': 'end'},
+  station_txt: {'font-size': '9px', 'font-family': connection_svg_fontdef, fill: "#222", 'text-anchor': 'end'},
 };
 connection_minor_colors = {
   sect_attr: {fill: '#eee', 'fill-opacity': .4, 'stroke-opacity': 1, 'stroke-width': .5},
-  sect_name1: {font: '14px Arial, Helvetica, sans-serif', 'font-weight': 'bold', fill: '#dddddd', 'text-anchor': 'middle'},
-  sect_name2: {font: '10px Arial, Helvetica, sans-serif', fill: '#dddddd', 'text-anchor': 'middle'},
+  sect_name1: {'font-size': '14px', 'font-family': connection_svg_fontdef, 'font-weight': 'bold', fill: '#dddddd', 'text-anchor': 'middle'},
+  sect_name2: {'font-size': '10px', 'font-family': connection_svg_fontdef, fill: '#dddddd', 'text-anchor': 'middle'},
   platf_dep_box: {fill: '#ee0', 'fill-opacity': .5},
   platf_arr_box: {fill: '#eee', 'fill-opacity': .5},
-  platf_txt: {'font': '9px Arial, Helvetica, sans-serif', fill: '#444', 'text-anchor': 'start'},
-  time_txt: {"font": '11px Arial, Helvetica, sans-serif', fill: "#666", 'text-anchor': 'end'},
-  station_txt: {"font": '9px Arial, Helvetica, sans-serif', fill: "#666", 'text-anchor': 'end'},
+  platf_txt: {'font-size': '9px', 'font-family': connection_svg_fontdef, fill: '#444', 'text-anchor': 'start'},
+  time_txt: {'font-size': '11px', 'font-family': connection_svg_fontdef, fill: "#666", 'text-anchor': 'end'},
+  station_txt: {'font-size': '9px', 'font-family': connection_svg_fontdef, fill: "#666", 'text-anchor': 'end'},
 };
+scale_txt =  {'font-size': '9px', 'font-family': connection_svg_fontdef, fill: "#333", 'text-anchor': 'start'};
+scale_line = {'stroke-opacity': .5, 'stroke-width': .25};
 
 function Connection(jsonConnection) {
   this.conn = jsonConnection;
